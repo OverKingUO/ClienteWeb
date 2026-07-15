@@ -1,0 +1,22 @@
+
+## PREMISAS A LA HORA DE ELABORAR TODAS LAS MACROS DEL REPOSITORIO
+
+1️⃣ Configuración sencilla ⚙️ 
+   - Solo introduces un número del 0 al X para decidir qué craftearás.
+   - Indica SI o NO para activar el modo de macreo.
+   - El resto de configuraciones se realizan selecccionando directamente en UO.
+
+2️⃣ Macros simplificadas 🔍
+   - Una sola macro por habilidad: el mismo script sirve para subir la skill o explotarla.
+   - Diseño modular y eficiente, pensado para minimizar errores y simplificar mantenimiento.
+
+3️⃣ Macros seguras 🛡️
+   - Verifican el contenedor seleccionado
+   - Nivel de skill requerido
+   - Materiales requeridos disponibles
+   - Herramientas utilizadas
+   - Nivel de comida
+   - Peso disponible, esperado y total
+   - Mensajes de error/acierto
+   - Chekeo de gumps
+   - Aparición de saves
