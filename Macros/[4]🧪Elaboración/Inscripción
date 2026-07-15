@@ -1,0 +1,610 @@
+// ============================================================
+// MACRO: Escriba — Fabricación de pergaminos
+// Versión: 1.0 | Ultima Alianza
+// Autor: Over
+// ============================================================
+
+
+// ============================================================
+// CONFIGURACIÓN DE USUARIO
+// ============================================================
+//
+const MODO_MACREO: 'SI' | 'NO' = 'NO';
+// MODO_MACREO: SI → se detiene al llegar a 100.0 (recomendado: pergamino 5)
+
+//
+const PERGAMINO   = 42;
+// PERGAMINO: número del pergamino a fabricar (elegir de la lista 1–64).
+//      1er Círculo       ||      2º Círculo       ||      3er Círculo      ||      4º Círculo       
+// 1 - Torpeza	          ||  9 - Agilidad         || 17 - Bendición        || 25 - Sanar masivo
+// 2 - Crear comida       || 10 - Astucia          || 18 - Bola de fuego    || 26 - Protección masiva
+// 3 - Debilidad mental   || 11 - Curación         || 19 - Cerrojo mágico   || 27 - Maldición
+// 4 - Sanar              || 12 - Herir            || 20 - Envenenar        || 28 - Muro de fuego
+// 5 - Flecha mágica      || 13 - Trampa mágica    || 21 - Telequinesis     || 29 - Gran curación
+// 6 - Visión nocturna    || 14 - Eliminar trampa  || 22 - Teleport         || 30 - Relámpago
+// 7 - Armadura reactiva  || 15 - Protección       || 23 - Abrir cerradura  || 31 - Drenar maná
+// 8 - Debilidad          || 16 - Fuerza           || 24 - Muro de piedra   || 32 - Recall
+// --------------------------------------------------------------------------------------------------
+//       5º Círculo       ||      6º Círculo       ||       7º Círculo      ||      8º Círculo       
+// 33 - Blade Spirits	  || 41 - Disipar          || 49 - Tormenta         || 57 - Terremoto
+// 34 - Disipar muro      || 42 - [[COR POR]]      || 50 - Muro de energía  || 58 - Vórtice de energía
+// 35 - Incógnito         || 43 - [[EXPLO]]        || 51 - [[FLAME]]        || 59 - Resucitar 
+// 36 - Reflejar magia    || 44 - Invisibilidad    || 52 - Portal mágico    || 60 - Elemental de aire 
+// 37 - Golpe mental      || 45 - Marcar runa      || 53 - Vampiro de maná  || 61 - Convocar demonio
+// 38 - Paralizar         || 46 - Maldición masiva || 54 - Disipar masivo   || 62 - Elemental de tierra
+// 39 - Muro de veneno    || 47 - Muro parálisis   || 55 - Meteoros         || 63 - Elemental de fuego
+// 40 - Convocar criatura || 48 - Detectar         || 56 - Polimorfismo     || 64 - Elemental de agua
+
+// ============================================================
+// ******* A PARTIR DE AQUÍ NO HAY NADA QUE CONFIGURAR. *******  
+// ============================================================
+
+
+
+// BLOQUE 1 — INTERFACES
+// ============================================================
+
+interface DefReactivo {
+  graphic: number;
+  hue:     number;
+  nombre:  string;
+}
+
+interface DefPergamino {
+  nombre:           string;
+  circulo:          number;   
+  idEnCirculo:      number;  
+  manaMinimo:       number;  
+  reactivos:        DefReactivo[];
+  graphicResultado: number;   
+}
+
+
+// BLOQUE 2 — CATÁLOGO DE REACTIVOS
+// ============================================================
+
+const R = {
+  NIGHTSHADE:     { graphic: 0xF88, hue: 0x0000, nombre: "Belladona"       },
+  BLACK_PEARL:    { graphic: 0xF7A, hue: 0x0000, nombre: "Perla Negra"     },
+  BLOOD_MOSS:     { graphic: 0xF7B, hue: 0x0000, nombre: "Musgo de Sangre" },
+  GINSENG:        { graphic: 0xF85, hue: 0x0000, nombre: "Ginseng"         },
+  GARLIC:         { graphic: 0xF84, hue: 0x0000, nombre: "Ajo"             },
+  SPIDER_SILK:    { graphic: 0xF8D, hue: 0x0000, nombre: "Seda de Araña"   },
+  SULPHUROUS_ASH: { graphic: 0xF8C, hue: 0x0000, nombre: "Ceniza Sulfurosa"},
+  MANDRAKE_ROOT:  { graphic: 0xF86, hue: 0x0000, nombre: "Raíz de Mandrágora"},
+};
+
+
+// BLOQUE 3 — MANA MÍNIMO POR CÍRCULO
+// ============================================================
+
+function manaMinimoPorCirculo(circulo: number): number {
+  if (circulo <= 3) return 10;
+  if (circulo === 4) return 15;
+  if (circulo <= 6) return 20;
+  if (circulo === 7) return 40;
+  return 50; // círculo 8
+}
+
+
+// BLOQUE 4 — CATÁLOGO DE PERGAMINOS (1–64)
+// ============================================================
+
+const PERGAMINOS: Record<number, DefPergamino> = {
+
+  // ── Círculo 1 ────────────────────────────────────────────
+  1: { nombre: "Clumsy",         circulo: 1, idEnCirculo: 1, manaMinimo: manaMinimoPorCirculo(1), reactivos: [R.BLOOD_MOSS, R.NIGHTSHADE],                    graphicResultado: 0x1F2E },
+  2: { nombre: "Create Food",    circulo: 1, idEnCirculo: 2, manaMinimo: manaMinimoPorCirculo(1), reactivos: [R.GARLIC, R.GINSENG, R.MANDRAKE_ROOT],          graphicResultado: 0x1F2F },
+  3: { nombre: "Feeblemind",     circulo: 1, idEnCirculo: 3, manaMinimo: manaMinimoPorCirculo(1), reactivos: [R.GINSENG, R.NIGHTSHADE],                        graphicResultado: 0x1F30 },
+  4: { nombre: "Heal",           circulo: 1, idEnCirculo: 4, manaMinimo: manaMinimoPorCirculo(1), reactivos: [R.GARLIC, R.GINSENG, R.SPIDER_SILK],            graphicResultado: 0x1F37 },
+  5: { nombre: "Magic Arrow",    circulo: 1, idEnCirculo: 5, manaMinimo: manaMinimoPorCirculo(1), reactivos: [R.SULPHUROUS_ASH],                               graphicResultado: 0x1F32 },
+  6: { nombre: "Night Sight",    circulo: 1, idEnCirculo: 6, manaMinimo: manaMinimoPorCirculo(1), reactivos: [R.SULPHUROUS_ASH, R.SPIDER_SILK],                graphicResultado: 0x1F33 },
+  7: { nombre: "Reactive Armor", circulo: 1, idEnCirculo: 7, manaMinimo: manaMinimoPorCirculo(1), reactivos: [R.GARLIC, R.SULPHUROUS_ASH, R.SPIDER_SILK],     graphicResultado: 0x1F2D },
+  8: { nombre: "Weaken",         circulo: 1, idEnCirculo: 8, manaMinimo: manaMinimoPorCirculo(1), reactivos: [R.GARLIC, R.NIGHTSHADE],                         graphicResultado: 0x1F34 },
+
+  // ── Círculo 2 ────────────────────────────────────────────
+  9:  { nombre: "Agility",     circulo: 2, idEnCirculo: 1, manaMinimo: manaMinimoPorCirculo(2), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT],                  graphicResultado: 0x1F35 },
+  10: { nombre: "Cunning",     circulo: 2, idEnCirculo: 2, manaMinimo: manaMinimoPorCirculo(2), reactivos: [R.NIGHTSHADE, R.MANDRAKE_ROOT],                  graphicResultado: 0x1F36 },
+  11: { nombre: "Cure",        circulo: 2, idEnCirculo: 3, manaMinimo: manaMinimoPorCirculo(2), reactivos: [R.GARLIC, R.GINSENG],                             graphicResultado: 0x1F31 },
+  12: { nombre: "Harm",        circulo: 2, idEnCirculo: 4, manaMinimo: manaMinimoPorCirculo(2), reactivos: [R.NIGHTSHADE, R.SPIDER_SILK],                     graphicResultado: 0x1F38 },
+  13: { nombre: "Magic Trap",  circulo: 2, idEnCirculo: 5, manaMinimo: manaMinimoPorCirculo(2), reactivos: [R.GARLIC, R.SPIDER_SILK, R.SULPHUROUS_ASH],      graphicResultado: 0x1F39 },
+  14: { nombre: "Remove Trap", circulo: 2, idEnCirculo: 6, manaMinimo: manaMinimoPorCirculo(2), reactivos: [R.BLOOD_MOSS, R.SULPHUROUS_ASH],                  graphicResultado: 0x1F3A },
+  15: { nombre: "Protection",  circulo: 2, idEnCirculo: 7, manaMinimo: manaMinimoPorCirculo(2), reactivos: [R.GARLIC, R.GINSENG, R.SULPHUROUS_ASH],           graphicResultado: 0x1F3B },
+  16: { nombre: "Strength",    circulo: 2, idEnCirculo: 8, manaMinimo: manaMinimoPorCirculo(2), reactivos: [R.MANDRAKE_ROOT, R.NIGHTSHADE],                   graphicResultado: 0x1F3C },
+
+  // ── Círculo 3 ────────────────────────────────────────────
+  17: { nombre: "Bless",         circulo: 3, idEnCirculo: 1, manaMinimo: manaMinimoPorCirculo(3), reactivos: [R.GARLIC, R.MANDRAKE_ROOT],                       graphicResultado: 0x1F3D },
+  18: { nombre: "Fireball",      circulo: 3, idEnCirculo: 2, manaMinimo: manaMinimoPorCirculo(3), reactivos: [R.BLACK_PEARL],                                   graphicResultado: 0x1F3E },
+  19: { nombre: "Magic Lock",    circulo: 3, idEnCirculo: 3, manaMinimo: manaMinimoPorCirculo(3), reactivos: [R.BLOOD_MOSS, R.GARLIC, R.SULPHUROUS_ASH],        graphicResultado: 0x1F3F },
+  20: { nombre: "Poison",        circulo: 3, idEnCirculo: 4, manaMinimo: manaMinimoPorCirculo(3), reactivos: [R.NIGHTSHADE],                                    graphicResultado: 0x1F40 },
+  21: { nombre: "Telekinesis",   circulo: 3, idEnCirculo: 5, manaMinimo: manaMinimoPorCirculo(3), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT],                   graphicResultado: 0x1F41 },
+  // NOTA: el mensaje original daba el mismo ID (0x1F41) para Telekinesis y Teleport.
+  // Se usa 0x1F42 para Teleport por ser el siguiente consecutivo en la secuencia (0x1F3D..0x1F44). Verificar en el juego.
+  22: { nombre: "Teleport",      circulo: 3, idEnCirculo: 6, manaMinimo: manaMinimoPorCirculo(3), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT],                   graphicResultado: 0x1F42 },
+  23: { nombre: "Unlock",        circulo: 3, idEnCirculo: 7, manaMinimo: manaMinimoPorCirculo(3), reactivos: [R.BLOOD_MOSS, R.SULPHUROUS_ASH],                  graphicResultado: 0x1F43 },
+  24: { nombre: "Wall of Stone", circulo: 3, idEnCirculo: 8, manaMinimo: manaMinimoPorCirculo(3), reactivos: [R.BLOOD_MOSS, R.GARLIC],                          graphicResultado: 0x1F44 },
+
+  // ── Círculo 4 ────────────────────────────────────────────
+  25: { nombre: "Archcure",        circulo: 4, idEnCirculo: 1, manaMinimo: manaMinimoPorCirculo(4), reactivos: [R.GARLIC, R.GINSENG, R.MANDRAKE_ROOT],                              graphicResultado: 0x1F45 },
+  26: { nombre: "Archprotection",  circulo: 4, idEnCirculo: 2, manaMinimo: manaMinimoPorCirculo(4), reactivos: [R.GARLIC, R.GINSENG, R.MANDRAKE_ROOT, R.SULPHUROUS_ASH],             graphicResultado: 0x1F46 },
+  27: { nombre: "Curse",           circulo: 4, idEnCirculo: 3, manaMinimo: manaMinimoPorCirculo(4), reactivos: [R.GARLIC, R.NIGHTSHADE, R.SULPHUROUS_ASH],                          graphicResultado: 0x1F47 },
+  28: { nombre: "Fire Field",      circulo: 4, idEnCirculo: 4, manaMinimo: manaMinimoPorCirculo(4), reactivos: [R.BLACK_PEARL, R.SPIDER_SILK, R.SULPHUROUS_ASH],                    graphicResultado: 0x1F48 },
+  29: { nombre: "Greater Heal",    circulo: 4, idEnCirculo: 5, manaMinimo: manaMinimoPorCirculo(4), reactivos: [R.GARLIC, R.GINSENG, R.MANDRAKE_ROOT, R.SPIDER_SILK],                graphicResultado: 0x1F49 },
+  30: { nombre: "Lightning",       circulo: 4, idEnCirculo: 6, manaMinimo: manaMinimoPorCirculo(4), reactivos: [R.MANDRAKE_ROOT, R.SULPHUROUS_ASH],                                 graphicResultado: 0x1F4A },
+  31: { nombre: "Mana Drain",      circulo: 4, idEnCirculo: 7, manaMinimo: manaMinimoPorCirculo(4), reactivos: [R.BLACK_PEARL, R.MANDRAKE_ROOT, R.SPIDER_SILK],                     graphicResultado: 0x1F4B },
+  32: { nombre: "Recall",          circulo: 4, idEnCirculo: 8, manaMinimo: manaMinimoPorCirculo(4), reactivos: [R.BLACK_PEARL, R.BLOOD_MOSS, R.MANDRAKE_ROOT],                      graphicResultado: 0x1F4C },
+
+  // ── Círculo 5 ────────────────────────────────────────────
+  33: { nombre: "Blade Spirits",    circulo: 5, idEnCirculo: 1, manaMinimo: manaMinimoPorCirculo(5), reactivos: [R.BLACK_PEARL, R.MANDRAKE_ROOT, R.NIGHTSHADE],                        graphicResultado: 0x1F4D },
+  34: { nombre: "Dispel Field",     circulo: 5, idEnCirculo: 2, manaMinimo: manaMinimoPorCirculo(5), reactivos: [R.BLACK_PEARL, R.GARLIC, R.SPIDER_SILK, R.SULPHUROUS_ASH],             graphicResultado: 0x1F4E },
+  35: { nombre: "Incognito",        circulo: 5, idEnCirculo: 3, manaMinimo: manaMinimoPorCirculo(5), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.NIGHTSHADE, R.SULPHUROUS_ASH],        graphicResultado: 0x1F4F },
+  36: { nombre: "Magic Reflection", circulo: 5, idEnCirculo: 4, manaMinimo: manaMinimoPorCirculo(5), reactivos: [R.GARLIC, R.MANDRAKE_ROOT, R.SPIDER_SILK],                             graphicResultado: 0x1F50 },
+  37: { nombre: "Mind Blast",       circulo: 5, idEnCirculo: 5, manaMinimo: manaMinimoPorCirculo(5), reactivos: [R.BLACK_PEARL, R.MANDRAKE_ROOT, R.NIGHTSHADE, R.SULPHUROUS_ASH],       graphicResultado: 0x1F51 },
+  38: { nombre: "Paralyze",         circulo: 5, idEnCirculo: 6, manaMinimo: manaMinimoPorCirculo(5), reactivos: [R.BLACK_PEARL, R.NIGHTSHADE, R.SPIDER_SILK],                           graphicResultado: 0x1F52 },
+  39: { nombre: "Poison Field",     circulo: 5, idEnCirculo: 7, manaMinimo: manaMinimoPorCirculo(5), reactivos: [R.BLACK_PEARL, R.NIGHTSHADE, R.SPIDER_SILK],                           graphicResultado: 0x1F53 },
+  40: { nombre: "Summon Creature",  circulo: 5, idEnCirculo: 8, manaMinimo: manaMinimoPorCirculo(5), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SPIDER_SILK],                         graphicResultado: 0x1F54 },
+
+  // ── Círculo 6 ────────────────────────────────────────────
+  41: { nombre: "Dispel",           circulo: 6, idEnCirculo: 1, manaMinimo: manaMinimoPorCirculo(6), reactivos: [R.GARLIC, R.MANDRAKE_ROOT, R.SULPHUROUS_ASH],                          graphicResultado: 0x1F55 },
+  42: { nombre: "Energy Bolt",      circulo: 6, idEnCirculo: 2, manaMinimo: manaMinimoPorCirculo(6), reactivos: [R.BLACK_PEARL, R.NIGHTSHADE],                                          graphicResultado: 0x1F56 },
+  43: { nombre: "Explosion",        circulo: 6, idEnCirculo: 3, manaMinimo: manaMinimoPorCirculo(6), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT],                                        graphicResultado: 0x1F57 },
+  44: { nombre: "Invisibility",     circulo: 6, idEnCirculo: 4, manaMinimo: manaMinimoPorCirculo(6), reactivos: [R.BLOOD_MOSS, R.NIGHTSHADE],                                           graphicResultado: 0x1F58 },
+  45: { nombre: "Mark",             circulo: 6, idEnCirculo: 5, manaMinimo: manaMinimoPorCirculo(6), reactivos: [R.BLACK_PEARL, R.BLOOD_MOSS, R.MANDRAKE_ROOT],                         graphicResultado: 0x1F59 },
+  46: { nombre: "Mass Curse",       circulo: 6, idEnCirculo: 6, manaMinimo: manaMinimoPorCirculo(6), reactivos: [R.GARLIC, R.MANDRAKE_ROOT, R.NIGHTSHADE, R.SULPHUROUS_ASH],             graphicResultado: 0x1F5A },
+  47: { nombre: "Paralyze Field",   circulo: 6, idEnCirculo: 7, manaMinimo: manaMinimoPorCirculo(6), reactivos: [R.BLACK_PEARL, R.GINSENG, R.SPIDER_SILK],                               graphicResultado: 0x1F5B },
+  48: { nombre: "Reveal",           circulo: 6, idEnCirculo: 8, manaMinimo: manaMinimoPorCirculo(6), reactivos: [R.BLOOD_MOSS, R.SULPHUROUS_ASH],                                       graphicResultado: 0x1F5C },
+
+  // ── Círculo 7 ────────────────────────────────────────────
+  49: { nombre: "Chain Lightning",         circulo: 7, idEnCirculo: 1, manaMinimo: manaMinimoPorCirculo(7), reactivos: [R.BLACK_PEARL, R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SULPHUROUS_ASH],   graphicResultado: 0x1F5D },
+  50: { nombre: "Energy Field",            circulo: 7, idEnCirculo: 2, manaMinimo: manaMinimoPorCirculo(7), reactivos: [R.BLACK_PEARL, R.MANDRAKE_ROOT, R.SPIDER_SILK, R.SULPHUROUS_ASH], graphicResultado: 0x1F5E },
+  51: { nombre: "Flamestrike",             circulo: 7, idEnCirculo: 3, manaMinimo: manaMinimoPorCirculo(7), reactivos: [R.SPIDER_SILK, R.SULPHUROUS_ASH],                                 graphicResultado: 0x1F5F },
+  52: { nombre: "Gate Travel",             circulo: 7, idEnCirculo: 4, manaMinimo: manaMinimoPorCirculo(7), reactivos: [R.BLACK_PEARL, R.MANDRAKE_ROOT, R.SULPHUROUS_ASH],                graphicResultado: 0x1F60 },
+  53: { nombre: "Mana Vampire",            circulo: 7, idEnCirculo: 5, manaMinimo: manaMinimoPorCirculo(7), reactivos: [R.BLACK_PEARL, R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SPIDER_SILK],     graphicResultado: 0x1F61 },
+  54: { nombre: "Mass Dispel",             circulo: 7, idEnCirculo: 6, manaMinimo: manaMinimoPorCirculo(7), reactivos: [R.BLACK_PEARL, R.GARLIC, R.MANDRAKE_ROOT, R.SULPHUROUS_ASH],      graphicResultado: 0x1F62 },
+  55: { nombre: "Meteor Swarm",            circulo: 7, idEnCirculo: 7, manaMinimo: manaMinimoPorCirculo(7), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SPIDER_SILK, R.SULPHUROUS_ASH],  graphicResultado: 0x1F63 },
+  56: { nombre: "Polymorph",               circulo: 7, idEnCirculo: 8, manaMinimo: manaMinimoPorCirculo(7), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SPIDER_SILK],                    graphicResultado: 0x1F64 },
+
+  // ── Círculo 8 ────────────────────────────────────────────
+  57: { nombre: "Earthquake",              circulo: 8, idEnCirculo: 1, manaMinimo: manaMinimoPorCirculo(8), reactivos: [R.BLOOD_MOSS, R.GINSENG, R.MANDRAKE_ROOT, R.SULPHUROUS_ASH],      graphicResultado: 0x1F65 },
+  58: { nombre: "Energy Vortex",           circulo: 8, idEnCirculo: 2, manaMinimo: manaMinimoPorCirculo(8), reactivos: [R.BLACK_PEARL, R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.NIGHTSHADE],      graphicResultado: 0x1F66 },
+  59: { nombre: "Resurrection",            circulo: 8, idEnCirculo: 3, manaMinimo: manaMinimoPorCirculo(8), reactivos: [R.BLOOD_MOSS, R.GARLIC, R.GINSENG],                               graphicResultado: 0x1F67 },
+  60: { nombre: "Summon Air Elemental",    circulo: 8, idEnCirculo: 4, manaMinimo: manaMinimoPorCirculo(8), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SPIDER_SILK],                    graphicResultado: 0x1F68 },
+  61: { nombre: "Summon Daemon",           circulo: 8, idEnCirculo: 5, manaMinimo: manaMinimoPorCirculo(8), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SPIDER_SILK, R.SULPHUROUS_ASH],  graphicResultado: 0x1F69 },
+  62: { nombre: "Summon Earth Elemental",  circulo: 8, idEnCirculo: 6, manaMinimo: manaMinimoPorCirculo(8), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SPIDER_SILK],                    graphicResultado: 0x1F6A },
+  63: { nombre: "Summon Fire Elemental",   circulo: 8, idEnCirculo: 7, manaMinimo: manaMinimoPorCirculo(8), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SPIDER_SILK, R.SULPHUROUS_ASH],  graphicResultado: 0x1F6B },
+  64: { nombre: "Summon Water Elemental",  circulo: 8, idEnCirculo: 8, manaMinimo: manaMinimoPorCirculo(8), reactivos: [R.BLOOD_MOSS, R.MANDRAKE_ROOT, R.SPIDER_SILK],                    graphicResultado: 0x1F6C },
+
+};
+
+
+// BLOQUE 5 — AJUSTES INTERNOS
+// ============================================================
+
+const CFG = {
+  GUMP_ESCRIBA:       0x463,   
+  BTN_FABRICAR:       508,     
+
+  HERRAMIENTA_GRAPHIC: 0x0FBF,
+  HERRAMIENTA_HUE:     0x0000,
+  HERRAMIENTA_PESO:    2.0,
+
+  PERGAMINO_GRAPHIC:   0x0E34,
+  PERGAMINO_HUE:       0x0000,
+  PERGAMINO_PESO:      1.0,
+
+  HERRAMIENTAS_EN_MOCHILA: 2,   
+  MARGEN_PESO_LIBRE:       10,
+  SLEEP_GUMP:              1500,
+  SLEEP_NAV:               700,
+  TIMEOUT_NAV_GUMP:        6000,
+  TIMEOUT_CRAFT:           10000,
+};
+
+const JOURNAL = {
+  EXITO:        ["colocas", "creas", "fabricas", "fabricado", "escribes", "terminas", "inscribes"],
+  SIN_SKILL:    ["no tienes la habilidad", "no eres lo suficientemente", "habilidad necesaria"],
+  ERROR_CRAFT:  ["fallas", "no has podido", "no puedes"],
+  SIN_MATERIAL: ["no tienes suficientes", "no tienes los materiales", "no tienes pergaminos"],
+};
+const TODOS_MSGS = [
+  ...JOURNAL.EXITO,
+  ...JOURNAL.SIN_SKILL,
+  ...JOURNAL.ERROR_CRAFT,
+  ...JOURNAL.SIN_MATERIAL,
+];
+
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN    = "Comienza la grabacion de las bases de datos";
+
+
+// BLOQUE 6 — VALIDACIÓN INICIAL
+// ============================================================
+
+function info(msg: string): void { client.sysMsg(`[ESCRIBA] ${msg}`, 0x44); }
+function err(msg: string):  void { client.sysMsg(`[ESCRIBA] ⚠ ${msg}`, 0x26); }
+
+const def = PERGAMINOS[PERGAMINO];
+if (!def) {
+  err(`Pergamino ${PERGAMINO} no existe en el catálogo. Valores válidos: 1–64.`);
+  err("Asegúrate de que el catálogo está completo y PERGAMINO tiene un valor correcto.");
+  exit();
+}
+
+const skInsc = player.getSkill(Skills.Inscribe);
+const skMag  = player.getSkill(Skills.Magery);
+if (!skInsc || !skMag) {
+  err("No se pudo leer la skill de Inscripción o Magia."); exit();
+}
+info(`Pergamino: ${def.nombre} (Círculo ${def.circulo}, posición ${def.idEnCirculo})`);
+info(`Inscripción: ${(skInsc.value / 10).toFixed(1)} | Magia: ${(skMag.value / 10).toFixed(1)}`);
+info(`Mana mínimo necesario: ${def.manaMinimo}`);
+if (MODO_MACREO === 'SI') info("Modo macreo activo — se detiene al llegar a Inscripción 100.0");
+
+
+// BLOQUE 7 — UTILIDADES
+// ============================================================
+
+function pesoLibre(): number {
+  return Math.max(0, player.weightMax - CFG.MARGEN_PESO_LIBRE - player.weight);
+}
+
+// Busca sin filtro de hue y filtra manualmente para garantizar hue exacto con hue=0.
+function contarEnContenedor(serial: number, graphic: number, hue: number): number {
+  const items = client.findAllItemsOfType(graphic, null, { serial }, null, 0);
+  let total = 0;
+  for (const it of items) { if (it.hue === hue) total += it.amount; }
+  return total;
+}
+
+function moverHaciaMochila(serial: number, graphic: number, hue: number, cantidad: number): void {
+  const items = client.findAllItemsOfType(graphic, null, { serial }, null, 0) as Item[];
+  const src = items.find(i => i.hue === hue);
+  if (!src) return;
+  player.moveItem(src, player.backpack!, 0, 0, 0, Math.min(cantidad, src.amount));
+  sleep(600);
+}
+
+function checkWorldSave(): void {
+  const hayAviso  = journal.containsText(WS_AVISO);
+  const hayInicio = journal.containsText(WS_INICIO);
+  if (!hayAviso && !hayInicio) return;
+  journal.clear();
+  if (hayAviso) {
+    info("Save en 1 min. Pausando...");
+    journal.waitForText(WS_INICIO, undefined, 90000);
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    journal.clear();
+  } else {
+    info("Save en curso. Esperando...");
+    journal.waitForText(WS_FIN, undefined, 180000);
+    journal.clear();
+  }
+  info("Save terminado. Continuando.");
+  sleep(3000);
+}
+
+
+// BLOQUE 8 — MEDITACIÓN
+// ============================================================
+
+function meditar(): void {
+  if (player.mana >= def.manaMinimo) return;
+  info(`Mana insuficiente (${player.mana}/${player.maxMana}). Meditando...`);
+  while (player.mana < player.maxMana) {
+    journal.clear();
+    player.useSkill(Skills.Meditation);
+    const resp = journal.waitForTextAny(
+      ["trance meditativo", "trance", "ya estas", "no puedes meditar", "you are"],
+      undefined, 5000
+    );
+    if (resp && (resp.includes("trance"))) {
+      while (player.mana < player.maxMana) sleep(1000);
+    } else {
+      sleep(4000);
+    }
+  }
+  info(`Mana recuperado (${player.mana}/${player.maxMana}).`);
+}
+
+
+// BLOQUE 9 — SELECCIÓN DE BOLSAS (SETEO)
+// ============================================================
+
+const bolsasAbiertas: Set<number> = new Set();
+
+function abrirSiNecesario(serial: number): void {
+  if (bolsasAbiertas.has(serial)) return;
+  player.use(serial);
+  sleep(1200);
+  bolsasAbiertas.add(serial);
+}
+
+function pedirBolsaConItem(
+  paso: string, descripcion: string,
+  graphic: number, hue: number, nombreItem: string
+): number {
+  while (true) {
+    info(`${paso} — Haz clic en la bolsa con ${descripcion}...`);
+    const t = target.query(false);
+    if (!t || !t.serial) { err("Selección cancelada."); exit(); }
+    abrirSiNecesario(t.serial);
+    if (contarEnContenedor(t.serial, graphic, hue) > 0) return t.serial;
+    err(`Esa bolsa no tiene ${nombreItem}. Selecciona la correcta...`);
+  }
+}
+
+function pedirContenedor(paso: string, descripcion: string): number {
+  info(`${paso} — Haz clic en: ${descripcion}`);
+  const t = target.query(false);
+  if (!t || !t.serial) { err("Selección cancelada."); exit(); }
+  abrirSiNecesario(t.serial);
+  return t.serial;
+}
+
+const totalPasos = def.reactivos.length + 3; // herramienta + pergaminos + reactivos(N) + destino
+let paso = 1;
+
+// Paso 1 — Herramienta (pluma y tinta)
+const serialBolsaHerramientas = pedirBolsaConItem(
+  `${paso++}/${totalPasos}`,
+  "pluma y tinta",
+  CFG.HERRAMIENTA_GRAPHIC, CFG.HERRAMIENTA_HUE, "plumas y tinta"
+);
+
+// Paso 2 — Pergaminos en blanco
+const serialBolsaPergaminos = pedirBolsaConItem(
+  `${paso++}/${totalPasos}`,
+  "pergaminos en blanco",
+  CFG.PERGAMINO_GRAPHIC, CFG.PERGAMINO_HUE, "pergaminos en blanco"
+);
+
+// Pasos 3..N — Reactivos (multi-bolsa)
+const serialPorReactivo: number[] = new Array(def.reactivos.length).fill(0);
+let pendientes: number[] = def.reactivos.map((_, i) => i);
+
+while (pendientes.length > 0) {
+  const nombresPend = pendientes.map(i => def.reactivos[i].nombre).join(", ");
+  info(`${paso}/${totalPasos} — Bolsa con: ${nombresPend}...`);
+  const t = target.query(false);
+  if (!t || !t.serial) { err("Selección cancelada."); exit(); }
+  abrirSiNecesario(t.serial);
+
+  const cubiertos: number[] = [];
+  for (const i of pendientes) {
+    const r = def.reactivos[i];
+    if (contarEnContenedor(t.serial, r.graphic, r.hue) > 0) {
+      serialPorReactivo[i] = t.serial;
+      cubiertos.push(i);
+      info(`  ✓ ${r.nombre} encontrado.`);
+    }
+  }
+
+  if (cubiertos.length === 0) {
+    err(`Esa bolsa no tiene ninguno de los reactivos pendientes. Selecciona otra...`);
+    continue;
+  }
+
+  pendientes = pendientes.filter(i => !cubiertos.includes(i));
+  paso++;
+  if (pendientes.length > 0) {
+    info(`Faltan: ${pendientes.map(i => def.reactivos[i].nombre).join(", ")}.`);
+  }
+}
+
+// Último paso — Bolsa destino para los pergaminos fabricados
+const serialDestino = pedirContenedor(`${paso}/${totalPasos}`, "BOLSA DESTINO para los pergaminos");
+
+// Verificación post-seteo
+function verificarContenedor(serial: number, graphic: number, hue: number, nombre: string): void {
+  if (contarEnContenedor(serial, graphic, hue) > 0) return;
+  info(`No veo ${nombre} en su bolsa. Reabriendo...`);
+  player.use(serial);
+  sleep(1200);
+}
+verificarContenedor(serialBolsaHerramientas, CFG.HERRAMIENTA_GRAPHIC, CFG.HERRAMIENTA_HUE, "plumas");
+verificarContenedor(serialBolsaPergaminos, CFG.PERGAMINO_GRAPHIC, CFG.PERGAMINO_HUE, "pergaminos en blanco");
+for (let i = 0; i < def.reactivos.length; i++) {
+  const r = def.reactivos[i];
+  verificarContenedor(serialPorReactivo[i], r.graphic, r.hue, r.nombre);
+}
+
+
+// BLOQUE 10 — REPOSICIÓN DE MATERIALES
+// ============================================================
+
+function reponerHerramienta(): boolean {
+  const enMochila = contarEnContenedor(player.backpack!.serial, CFG.HERRAMIENTA_GRAPHIC, CFG.HERRAMIENTA_HUE);
+  if (enMochila >= CFG.HERRAMIENTAS_EN_MOCHILA) return true;
+  const faltan = CFG.HERRAMIENTAS_EN_MOCHILA - enMochila;
+  const enBolsa = contarEnContenedor(serialBolsaHerramientas, CFG.HERRAMIENTA_GRAPHIC, CFG.HERRAMIENTA_HUE);
+  if (enBolsa === 0) return enMochila > 0;
+  const caben = Math.floor(pesoLibre() / CFG.HERRAMIENTA_PESO);
+  const aMover = Math.min(faltan, enBolsa, caben);
+  if (aMover > 0) moverHaciaMochila(serialBolsaHerramientas, CFG.HERRAMIENTA_GRAPHIC, CFG.HERRAMIENTA_HUE, aMover);
+  return contarEnContenedor(player.backpack!.serial, CFG.HERRAMIENTA_GRAPHIC, CFG.HERRAMIENTA_HUE) > 0;
+}
+
+function reponerPergaminos(): boolean {
+  const enMochila = contarEnContenedor(player.backpack!.serial, CFG.PERGAMINO_GRAPHIC, CFG.PERGAMINO_HUE);
+  if (enMochila >= 10) return true; // mantener ~10 en mochila
+  const faltan = 10 - enMochila;
+  const enBolsa = contarEnContenedor(serialBolsaPergaminos, CFG.PERGAMINO_GRAPHIC, CFG.PERGAMINO_HUE);
+  if (enBolsa === 0) return enMochila > 0;
+  const caben = Math.floor(pesoLibre() / CFG.PERGAMINO_PESO);
+  const aMover = Math.min(faltan, enBolsa, caben);
+  if (aMover > 0) moverHaciaMochila(serialBolsaPergaminos, CFG.PERGAMINO_GRAPHIC, CFG.PERGAMINO_HUE, aMover);
+  return contarEnContenedor(player.backpack!.serial, CFG.PERGAMINO_GRAPHIC, CFG.PERGAMINO_HUE) > 0;
+}
+
+function reponerReactivos(): boolean {
+  for (let i = 0; i < def.reactivos.length; i++) {
+    const r = def.reactivos[i];
+    const enMochila = contarEnContenedor(player.backpack!.serial, r.graphic, r.hue);
+    if (enMochila >= 10) continue;
+    const faltan = 10 - enMochila;
+    const enBolsa = contarEnContenedor(serialPorReactivo[i], r.graphic, r.hue);
+    if (enBolsa === 0) {
+      if (enMochila === 0) { err(`Sin ${r.nombre}. Macro detenida.`); return false; }
+      continue;
+    }
+    const caben = Math.floor(pesoLibre() / 1.0);
+    const aMover = Math.min(faltan, enBolsa, caben);
+    if (aMover > 0) moverHaciaMochila(serialPorReactivo[i], r.graphic, r.hue, aMover);
+  }
+  // Verificar que hay al menos 1 de cada reactivo
+  for (const r of def.reactivos) {
+    if (contarEnContenedor(player.backpack!.serial, r.graphic, r.hue) === 0) {
+      err(`Sin ${r.nombre} en mochila.`); return false;
+    }
+  }
+  return true;
+}
+
+function moverResultadoADestino(): void {
+  const item = client.findType(def.graphicResultado, null, player.backpack, null, 0);
+  if (!item) {
+    err(`No se encontró el pergamino fabricado (graphic 0x${def.graphicResultado.toString(16)}) en la mochila.`);
+    return;
+  }
+  player.moveItem(item, { serial: serialDestino }, 0, 0, 0, item.amount);
+  sleep(600);
+}
+
+
+// BLOQUE 11 — NAVEGACIÓN DEL GUMP
+// ============================================================
+
+let gumpNavegado: Gump | null = null;  // gump en la pantalla de fabricación
+
+function esperarGumpEscriba(serialAntes: number, timeoutMs: number, contexto: string): Gump | null {
+  const fin = Date.now() + timeoutMs;
+  while (Date.now() < fin) {
+    sleep(100);
+    if (Gump.lastSerial !== serialAntes) {
+      sleep(200);
+      const g = Gump.last;
+      if (g) return g;
+    }
+  }
+  // Serial no cambió — gump actualizado in-place
+  const actual = Gump.last;
+  if (actual && actual.serial === serialAntes) return actual;
+  log(`[ESCRIBA][DEBUG] ${contexto}: sin gump nuevo. lastSerial=${Gump.lastSerial}`);
+  return null;
+}
+
+function avanzarGump(gump: Gump, boton: number, etapa: string): Gump | null {
+  const serialAntes = gump.serial;
+  gump.reply(boton);
+  sleep(CFG.SLEEP_NAV);
+  const siguiente = esperarGumpEscriba(serialAntes, CFG.TIMEOUT_NAV_GUMP, etapa);
+  if (!siguiente) { err(`Menú perdido en: ${etapa}`); return null; }
+  return siguiente;
+}
+
+// Navega desde el menú inicial hasta la pantalla de fabricación del pergamino.
+// Solo se llama la primera vez y si el gump se pierde.
+function navegarAFabricacion(): boolean {
+  const pergamino = client.findType(CFG.PERGAMINO_GRAPHIC, CFG.PERGAMINO_HUE, player.backpack, null, 0);
+  if (!pergamino) { err("Sin pergaminos en blanco en mochila."); return false; }
+
+  player.use(pergamino);
+  sleep(CFG.SLEEP_GUMP);
+  let g = Gump.findOrWait(CFG.GUMP_ESCRIBA, CFG.TIMEOUT_NAV_GUMP);
+  if (!g || !g.exists) { err("No se abrió el menú de Inscripción."); return false; }
+
+  // Elegir círculo (botón = 600 + circulo)
+  const btnCirculo = 600 + def.circulo;
+  g = avanzarGump(g, btnCirculo, `elegir círculo ${def.circulo}`);
+  if (!g) return false;
+
+  // Elegir pergamino dentro del círculo (botón = 600 + idEnCirculo)
+  const btnPergamino = 600 + def.idEnCirculo;
+  g = avanzarGump(g, btnPergamino, `elegir pergamino ${def.nombre}`);
+  if (!g) return false;
+
+  // El menú queda en la pantalla de fabricación con el botón 508 disponible
+  gumpNavegado = g;
+  return true;
+}
+
+
+// BLOQUE 12 — BUCLE DE FABRICACIÓN
+// ============================================================
+
+// Navegar al pergamino la primera vez
+if (!navegarAFabricacion()) {
+  err("No se pudo navegar al pergamino. Comprueba el catálogo y los materiales."); exit();
+}
+
+let fabricados = 0;
+
+while (true) {
+
+  // ── Skill cap (modo macreo) ──
+  if (MODO_MACREO === 'SI') {
+    const sk = player.getSkill(Skills.Inscribe);
+    if (sk && sk.value / 10 >= 100.0) {
+      info("Inscripción 100.0 alcanzada. Macro detenida."); break;
+    }
+  }
+
+  // ── Mana ──
+  meditar();
+
+  // ── Materiales ──
+  if (!reponerHerramienta()) break;
+  if (!reponerPergaminos())  break;
+  if (!reponerReactivos())   break;
+
+  // ── Gump disponible ──
+  if (!gumpNavegado || !gumpNavegado.exists) {
+    info("Menú perdido. Volviendo a navegar...");
+    if (!navegarAFabricacion()) break;
+  }
+
+  // ── Fabricar ──
+  journal.clear();
+  checkWorldSave();
+  gumpNavegado!.reply(CFG.BTN_FABRICAR);
+
+  const resp = journal.waitForTextAny(TODOS_MSGS, undefined, CFG.TIMEOUT_CRAFT);
+
+  if (!resp) { sleep(1000); continue; }
+
+  const respLower = resp.toLowerCase();
+
+  if (JOURNAL.SIN_MATERIAL.some(m => respLower.includes(m))) {
+    info("Sin materiales. Reponiendo...");
+    continue;
+  }
+
+  if (JOURNAL.SIN_SKILL.some(m => respLower.includes(m))) {
+    info("Skill insuficiente para este pergamino.");
+    break;
+  }
+
+  if (JOURNAL.ERROR_CRAFT.some(m => respLower.includes(m))) {
+    sleep(500); continue;
+  }
+
+  // ── Éxito ──
+  fabricados++;
+
+  // Mover pergamino fabricado al destino
+  moverResultadoADestino();
+
+  // Tras fabricar el gump reaparece en la pantalla de fabricación.
+  // Actualizarlo para la siguiente iteración.
+  sleep(CFG.SLEEP_NAV);
+  const gumpTras = Gump.last;
+  if (gumpTras && gumpTras.exists) {
+    gumpNavegado = gumpTras;
+  } else {
+    gumpNavegado = null; // forzar renavegación en la próxima iteración
+  }
+}
+
+info(`Finalizado. Pergaminos fabricados: ${fabricados}.`);
