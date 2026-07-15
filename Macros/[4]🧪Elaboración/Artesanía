@@ -1,0 +1,772 @@
+// ============================================================
+// MACRO: Fabricación de herramientas — Ultima Alianza
+// Versión: 6.0
+// Autor: Barack Segoviain
+// ============================================================
+
+// ============================================================
+// CONFIGURACIÓN DE USUARIO — lo único a modificar
+// ============================================================
+// Pon el número de la herramienta que quieres fabricar.
+//
+//   ── Herramientas ────────────────────────────────────────
+//    1 - Mazo                         
+//    2 - Herramientas de artesano     
+//    3 - Mortero                      
+//    4 - Kit de costura               
+//    5 - Kit de curtición de escamas  
+//    6 - Mazo mágico                
+//    7 - Pico mágico                  
+//    8 - Hacha mágica 
+//    9 - Ganzúa                       
+//
+//   ── Objetos ──────────────────────────────────────────────
+//   10 - Engranajes                   [1 lingote hierro]               {14.7 tinker}
+//   11 - Barril de pociones           [18 troncos + 8 l.hierro]        {65.0 tinker}    
+//   12 - Runa  
+//   13 - Cuentas                         
+//   14 - Adorno para varitas (cargas) 
+
+const HERRAMIENTA_A_FABRICAR = 11;
+
+// ¿Quieres subir la habilidad de Tinkering?
+// Se recomienda usar la opción 9 (Ganzúa) o 10 (Engranajes) para macroear.
+//   true  → la macro se detendrá automáticamente al llegar a 100.0 de Tinkering.
+//   false → la macro continuará hasta quedarse sin recursos o materiales.
+const SUBIR_HABILIDAD = false;
+
+// ============================================================
+// BLOQUE 1 — CATÁLOGO DE HERRAMIENTAS (uso interno)
+// ============================================================
+//
+// Cada receta puede tener UNO o VARIOS recursos (campo "recursos").
+// Cada entrada de recurso tiene:
+//   graphic  — gráfico del item
+//   hue      — hue EXACTO (nunca null; hierro=0, plata=0 con graphic propio, etc.)
+//   cantidad — unidades mínimas necesarias por craft
+//   peso     — peso por unidad
+//   nombre   — nombre legible para mensajes
+//
+// La macro pide tantas bolsas como necesite hasta cubrir todos los recursos.
+// Si una bolsa contiene varios materiales, los cubre todos de una vez.
+//
+// IDs de categoría del gump de Tinkering:
+//   contenedores=1  partes=2  herramientas=3  joyería=6  mágicos=7
+//   siguiente página dentro de categoría=404
+
+interface RecursoEntry {
+  graphic:  number;
+  hue:      number;
+  cantidad: number;
+  peso:     number;
+  nombre:   string;
+}
+
+interface DefHerramienta {
+  nombre:           string;
+  categoriaId:      number;
+  paginaSiguiente?: true;
+  herramientaId:    number;
+  skill:            Skills;
+  skillMinima:      number;
+  skill2?:          Skills;
+  skillMinima2?:    number;
+  herramientaFabricacionGraphic: number;
+  herramientaFabricacionHue:     number;
+  herramientaFabricacionPeso:    number;
+  recursos:         RecursoEntry[];
+  resultGraphic:    number;
+  resultPeso:       number;
+}
+
+// Gráficos de recursos centralizados
+const G = {
+  LINGOTE_HIERRO:  0x1BEF,
+  LINGOTE_PLATA:   0x1BF5,
+  LINGOTE_ORO:     0x1BE9,
+  TRONCO:          0x1BDD,
+  TRONCO_MAGICO:   0x1BDD,  // AJUSTAR hue si el tronco mágico tiene hue distinto al normal en UA
+  TELA:            0x175D,
+  AMBAR:           0x0F25,
+  CUENTAS:         0x108B,
+  TINKER_TOOLS:    0x1EBC,
+};
+
+const HERRAMIENTAS: Record<number, DefHerramienta> = {
+
+  // ── 1. Mazo ─────────────────────────────────────────────────
+  1: {
+    nombre: "Mazo",
+    categoriaId: 3, paginaSiguiente: true, herramientaId: 613,
+    skill: Skills.Tinkering, skillMinima: 54.1,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_HIERRO, hue: 0x0000, cantidad: 4, peso: 2.0, nombre: "lingotes de hierro" },
+    ],
+    resultGraphic: 0xFB4, resultPeso: 18.0,
+  },
+
+  // ── 2. Herramientas de artesano ─────────────────────────────
+  2: {
+    nombre: "Herramientas de artesano",
+    categoriaId: 3, paginaSiguiente: true, herramientaId: 615,
+    skill: Skills.Tinkering, skillMinima: 35.0,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_HIERRO, hue: 0x0000, cantidad: 4, peso: 2.0, nombre: "lingotes de hierro" },
+    ],
+    resultGraphic: 0x1EBC, resultPeso: 2.0,
+  },
+
+  // ── 3. Mortero ──────────────────────────────────────────────
+  3: {
+    nombre: "Mortero",
+    categoriaId: 3, herramientaId: 608,
+    skill: Skills.Tinkering, skillMinima: 23.3,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_HIERRO, hue: 0x0000, cantidad: 3, peso: 2.0, nombre: "lingotes de hierro" },
+    ],
+    resultGraphic: 0xE9B, resultPeso: 1.0,
+  },
+
+  // ── 4. Kit de costura ───────────────────────────────────────
+  4: {
+    nombre: "Kit de costura",
+    categoriaId: 3, herramientaId: 610,
+    skill: Skills.Tinkering, skillMinima: 18.8,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_HIERRO, hue: 0x0000, cantidad: 2, peso: 2.0, nombre: "lingotes de hierro" },
+    ],
+    resultGraphic: 0xF9D, resultPeso: 2.0,
+  },
+
+  // ── 5. Kit de curtición de escamas ──────────────────────────
+  5: {
+    nombre: "Kit de curtición de escamas",
+    categoriaId: 3, paginaSiguiente: true, herramientaId: 611,
+    skill: Skills.Tinkering, skillMinima: 75.0,
+    skill2: Skills.Tailoring, skillMinima2: 50.0,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_PLATA, hue: 0x0000, cantidad: 10, peso: 2.0, nombre: "lingotes de plata" },
+      { graphic: G.TELA,          hue: 0x0000, cantidad:  3, peso: 1.0, nombre: "tela" },
+    ],
+    resultGraphic: 0xF9D, resultPeso: 10.0,
+  },
+
+  // ── 6. Mazo mágico ──────────────────────────────────────────
+  6: {
+    nombre: "Mazo mágico",
+    categoriaId: 7, herramientaId: 604,
+    skill: Skills.Tinkering, skillMinima: 98.0,
+    skill2: Skills.Magery,   skillMinima2: 60.0,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_PLATA, hue: 0x0000, cantidad: 4, peso: 2.0, nombre: "lingotes de plata" },
+    ],
+    resultGraphic: 0xFB4, resultPeso: 12.0,
+  },
+
+  // ── 7. Pico mágico ───────────────────────────────────────────
+  7: {
+    nombre: "Pico mágico",
+    categoriaId: 7, herramientaId: 602,
+    skill: Skills.Tinkering, skillMinima: 96.0,
+    skill2: Skills.Magery,   skillMinima2: 60.0,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_PLATA, hue: 0x0000, cantidad: 4, peso: 2.0, nombre: "lingotes de plata" },
+    ],
+    resultGraphic: 0xE85, resultPeso: 20.0,
+  },
+
+  // ── 8. Hacha mágica ─────────────────────────────────────────
+  8: {
+    nombre: "Hacha mágica",
+    categoriaId: 7, herramientaId: 603,
+    skill: Skills.Tinkering, skillMinima: 94.0,
+    skill2: Skills.Magery,   skillMinima2: 60.0,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_PLATA, hue: 0x0000, cantidad: 4, peso: 2.0, nombre: "lingotes de plata" },
+    ],
+    resultGraphic: 0xF43, resultPeso: 20.0,
+  },
+
+  // ── 9. Ganzúa ───────────────────────────────────────────────
+  9: {
+    nombre: "Ganzúa",
+    categoriaId: 3, herramientaId: 603,
+    skill: Skills.Tinkering, skillMinima: 42.5,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_HIERRO, hue: 0x0000, cantidad: 1, peso: 2.0, nombre: "lingotes de hierro" },
+    ],
+    resultGraphic: 0x14FB, resultPeso: 0.5,
+  },
+
+  // ── 10. Engranajes ───────────────────────────────────────────
+  10: {
+    nombre: "Engranajes",
+    categoriaId: 2, herramientaId: 603,
+    skill: Skills.Tinkering, skillMinima: 14.7,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_HIERRO, hue: 0x0000, cantidad: 1, peso: 2.0, nombre: "lingotes de hierro" },
+    ],
+    resultGraphic: 0x1053, resultPeso: 1.0,
+  },
+
+  // ── 11. Barril de pociones ───────────────────────────────────
+  11: {
+    nombre: "Barril de pociones",
+    categoriaId: 1, herramientaId: 602,
+    skill: Skills.Tinkering, skillMinima: 65.0,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.TRONCO,         hue: 0x0000, cantidad: 18, peso: 2.0, nombre: "troncos" },
+      { graphic: G.LINGOTE_HIERRO, hue: 0x0000, cantidad:  8, peso: 2.0, nombre: "lingotes de hierro" },
+    ],
+    resultGraphic: 0x1940, resultPeso: 40.0,
+  },
+
+  // ── 12. Runa ─────────────────────────────────────────────────
+  12: {
+    nombre: "Runa",
+    categoriaId: 7, herramientaId: 601,
+    skill: Skills.Tinkering, skillMinima: 90.0,
+    skill2: Skills.Magery,   skillMinima2: 60.0,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_ORO,   hue: 0x0000, cantidad:  5, peso: 2.0, nombre: "lingotes de oro" },
+      { graphic: G.TRONCO_MAGICO, hue: 0x0000, cantidad: 10, peso: 2.0, nombre: "troncos mágicos" },  // AJUSTAR hue si el tronco mágico tiene hue distinto al normal
+      { graphic: G.AMBAR,         hue: 0x0000, cantidad:  5, peso: 1.0, nombre: "piezas de ámbar" },
+    ],
+    resultGraphic: 0x1F14, resultPeso: 1.0,
+  },
+
+  // ── 13. Cuentas ──────────────────────────────────────────────
+  13: {
+    nombre: "Cuentas",
+    categoriaId: 6, herramientaId: 601,
+    skill: Skills.Tinkering, skillMinima: 60.0,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_HIERRO, hue: 0x0000, cantidad: 1, peso: 2.0, nombre: "lingotes de hierro" },
+      { graphic: G.AMBAR,          hue: 0x0000, cantidad: 3, peso: 1.0, nombre: "piezas de ámbar" },
+    ],
+    resultGraphic: 0x108B, resultPeso: 1.0,
+  },
+
+  // ── 14. Adorno para varitas (cargas) ─────────────────────────
+  14: {
+    nombre: "Adorno para varitas (cargas)",
+    categoriaId: 7, herramientaId: 607,
+    skill: Skills.Tinkering, skillMinima: 85.5,
+    herramientaFabricacionGraphic: G.TINKER_TOOLS, herramientaFabricacionHue: 0x0000, herramientaFabricacionPeso: 2.0,
+    recursos: [
+      { graphic: G.LINGOTE_ORO, hue: 0x0000, cantidad: 1, peso: 2.0, nombre: "lingotes de oro" },
+      { graphic: G.CUENTAS,     hue: 0x0000, cantidad: 2, peso: 1.0, nombre: "cuentas" },
+    ],
+    resultGraphic: 0x105D, resultPeso: 1.0,
+  },
+
+};
+
+
+// ============================================================
+// BLOQUE 2 — AJUSTES INTERNOS
+// ============================================================
+
+const CFG = {
+  HERRAMIENTA:             HERRAMIENTA_A_FABRICAR,
+  GUMP_TINKERING:          0x460,
+  BTN_FABRICAR_ULTIMO:     508,
+  BTN_SIGUIENTE:           404,
+  HERRAMIENTAS_EN_MOCHILA: 2,
+  MARGEN_PESO_LIBRE:       5,
+  SLEEP_GUMP:              2000,
+  SLEEP_NAV:               700,
+  SLEEP_MOVE:              600,
+  TIMEOUT_CRAFT:           8000,
+  LIMITE_CONTENEDOR:       255,
+};
+
+const JOURNAL_FABRICACION = {
+  EXITO:        ["Has fabricado", "creas con exito", "Pones el", "colocas"],
+  ERROR_CRAFT:  ["fallas", "no has podido"],
+  SIN_MATERIAL: ["no tienes suficiente", "no tienes los materiales"],
+};
+
+const TODOS_MSGS_CRAFT = [
+  ...JOURNAL_FABRICACION.EXITO,
+  ...JOURNAL_FABRICACION.ERROR_CRAFT,
+  ...JOURNAL_FABRICACION.SIN_MATERIAL,
+];
+
+
+// ============================================================
+// WORLD SAVE
+// ============================================================
+
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN    = "Comienza la grabacion de las bases de datos";
+
+function checkWorldSave(): void {
+  if (journal.containsText(WS_AVISO)) {
+    client.sysMsg("[FABRICAR HERRAMIENTAS] Save en 1 min. Pausando...", 0x26);
+    journal.clear();
+    journal.waitForText(WS_INICIO, undefined, 90000);
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    client.sysMsg("[FABRICAR HERRAMIENTAS] Save terminado. Continuando.", 0x44);
+    journal.clear();
+    sleep(3000);
+    return;
+  }
+  if (journal.containsText(WS_INICIO)) {
+    client.sysMsg("[FABRICAR HERRAMIENTAS] Save en curso. Esperando...", 0x26);
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    client.sysMsg("[FABRICAR HERRAMIENTAS] Save terminado. Continuando.", 0x44);
+    journal.clear();
+    sleep(3000);
+  }
+}
+
+
+// ============================================================
+// BLOQUE 3 — UTILIDADES
+// ============================================================
+
+function cfg(msg: string): void { client.sysMsg(`[FABRICAR HERRAMIENTAS] ${msg}`, 0x44); }
+function err(msg: string): void { client.sysMsg(`[FABRICAR HERRAMIENTAS] ${msg}`, 0x26); }
+
+// Siempre buscamos sin filtro de hue y filtramos por .hue manualmente,
+// porque findAllItemsOfType trata hue=0 igual que null (sin filtro).
+
+function contarUnidades(serial: number, graphic: number, hue: number): number {
+  const items = client.findAllItemsOfType(graphic, null, { serial }, null, 0);
+  let total = 0;
+  for (const it of items) { if (it.hue === hue) total += it.amount; }
+  return total;
+}
+
+function contarUnidadesSinHue(serial: number, graphic: number): number {
+  const items = client.findAllItemsOfType(graphic, null, { serial }, null, 0);
+  let total = 0;
+  for (const it of items) total += it.amount;
+  return total;
+}
+
+function moverUnidades(origen: number, destino: number, graphic: number, cantidad: number, hue: number): number {
+  let movidas = 0;
+  while (movidas < cantidad) {
+    const todos = client.findAllItemsOfType(graphic, null, { serial: origen }, null, 0);
+    const item = todos.find(it => it.hue === hue);
+    if (!item) break;
+    const aMover = Math.min(item.amount, cantidad - movidas);
+    player.moveItem(item, { serial: destino }, 0, 0, 0, aMover);
+    sleep(CFG.SLEEP_MOVE);
+    movidas += aMover;
+  }
+  return movidas;
+}
+
+function moverUnidadesSinHue(origen: number, destino: number, graphic: number, cantidad: number): number {
+  let movidas = 0;
+  while (movidas < cantidad) {
+    const todos = client.findAllItemsOfType(graphic, null, { serial: origen }, null, 0);
+    const item = todos[0];
+    if (!item) break;
+    const aMover = Math.min(item.amount, cantidad - movidas);
+    player.moveItem(item, { serial: destino }, 0, 0, 0, aMover);
+    sleep(CFG.SLEEP_MOVE);
+    movidas += aMover;
+  }
+  return movidas;
+}
+
+function pesoLibre(): number {
+  return Math.max(0, player.weightMax - CFG.MARGEN_PESO_LIBRE - player.weight);
+}
+
+
+// ============================================================
+// BLOQUE 4 — VALIDACIÓN INICIAL
+// ============================================================
+
+// Comprobar que HERRAMIENTA_A_FABRICAR tiene un valor válido ANTES de hacer nada.
+// Esto es lo primero que se ejecuta para que el error sea inmediato y claro.
+if (CFG.HERRAMIENTA === 0 || CFG.HERRAMIENTA === null || CFG.HERRAMIENTA === undefined) {
+  err("⚠ HERRAMIENTA_A_FABRICAR está a 0.");
+  err("Edita la macro y pon el número de la herramienta que quieres fabricar.");
+  err("Consulta la lista en la cabecera del script (números del 1 al 14).");
+  exit();
+}
+
+const def = HERRAMIENTAS[CFG.HERRAMIENTA];
+if (!def) {
+  err(`⚠ El número ${CFG.HERRAMIENTA} no existe en el catálogo.`);
+  err("Los números válidos son: 1-9, 10, 11, 12, 13, 14.");
+  err("Edita la macro y pon uno de esos números en HERRAMIENTA_A_FABRICAR.");
+  exit();
+}
+
+const skillInfo = player.getSkill(def.skill);
+const skillValor = skillInfo ? skillInfo.value / 10 : 0;
+if (skillValor < def.skillMinima) {
+  err(`Skill insuficiente. Tienes ${skillValor.toFixed(1)}, necesitas ${def.skillMinima}.`); exit();
+}
+
+if (def.skill2 !== undefined && def.skillMinima2 !== undefined) {
+  const skillInfo2 = player.getSkill(def.skill2);
+  const skillValor2 = skillInfo2 ? skillInfo2.value / 10 : 0;
+  if (skillValor2 < def.skillMinima2) {
+    err(`Skill secundaria insuficiente. Tienes ${skillValor2.toFixed(1)}, necesitas ${def.skillMinima2}.`); exit();
+  }
+}
+
+cfg(`Herramienta: ${def.nombre}`);
+
+
+// ============================================================
+// BLOQUE 5 — SELECCIÓN DE BOLSAS CON VALIDACIÓN MULTI-RECURSO
+// ============================================================
+//
+// La macro pide bolsas al jugador hasta que todos los recursos queden cubiertos.
+// Reglas:
+//   · Si una bolsa tiene TODOS los recursos pendientes  → cubre todo de una vez.
+//   · Si tiene ALGUNOS                                  → acepta esos, pide otra para el resto.
+//   · Si no tiene NINGUNO de los pendientes             → rechaza y repite la pregunta.
+//   · Una misma bolsa puede cubrir varios recursos simultáneamente.
+
+function pedirDestinoAbierto(paso: string): number {
+  cfg(`${paso} — Haz clic en el CONTENEDOR DESTINO...`);
+  const t = target.query(false);
+  if (!t || !t.serial) { err("Selección cancelada. Macro detenida."); exit(); }
+  player.use(t.serial);
+  sleep(800);
+  return t.serial;
+}
+
+// serialPorRecurso[i] = serial de la bolsa asignada al recurso i de def.recursos
+const serialPorRecurso: number[] = new Array(def.recursos.length).fill(0);
+const totalPasos = def.recursos.length + 2; // herramientas + materiales(1..N) + destino
+
+// ── Paso 1: bolsa de herramientas de fabricación ─────────────
+cfg(`1/${totalPasos} — Haz clic en la bolsa con HERRAMIENTAS DE TINKER...`);
+let serialBolsaHerramientas = 0;
+while (true) {
+  const t = target.query(false);
+  if (!t || !t.serial) { err("Selección cancelada. Macro detenida."); exit(); }
+  player.use(t.serial);
+  sleep(800);
+  const cantidad = contarUnidades(t.serial, def.herramientaFabricacionGraphic, def.herramientaFabricacionHue);
+  if (cantidad > 0) {
+    serialBolsaHerramientas = t.serial;
+    cfg(`Bolsa de herramientas OK (${cantidad} unidades).`);
+    break;
+  }
+  err("Esa bolsa no tiene herramientas de tinker del tipo correcto. Selecciona otra...");
+}
+
+// ── Pasos 2..N: bolsas de materiales ─────────────────────────
+let pendientes: number[] = def.recursos.map((_, i) => i);
+let numeroPaso = 2;
+
+while (pendientes.length > 0) {
+  const nombresPendientes = pendientes.map(i => def.recursos[i].nombre).join(", ");
+  cfg(`${numeroPaso}/${totalPasos} — Bolsa con: ${nombresPendientes}...`);
+
+  const t = target.query(false);
+  if (!t || !t.serial) { err("Selección cancelada. Macro detenida."); exit(); }
+  player.use(t.serial);
+  sleep(800);
+
+  const cubiertosAhora: number[] = [];
+  for (const i of pendientes) {
+    const r = def.recursos[i];
+    if (contarUnidades(t.serial, r.graphic, r.hue) > 0) {
+      serialPorRecurso[i] = t.serial;
+      cubiertosAhora.push(i);
+      cfg(`  OK: ${r.nombre} encontrado.`);
+    }
+  }
+
+  if (cubiertosAhora.length === 0) {
+    err(`Esa bolsa no contiene ninguno de los materiales pendientes (${nombresPendientes}). Selecciona otra...`);
+    continue;
+  }
+
+  pendientes = pendientes.filter(i => !cubiertosAhora.includes(i));
+  numeroPaso++;
+  if (pendientes.length > 0) {
+    cfg(`Faltan por asignar: ${pendientes.map(i => def.recursos[i].nombre).join(", ")}.`);
+  }
+}
+
+cfg("Todas las bolsas de materiales seleccionadas.");
+
+// ── Último paso: contenedor destino ──────────────────────────
+const serialDestino = pedirDestinoAbierto(`${numeroPaso}/${totalPasos}`);
+
+
+// ============================================================
+// BLOQUE 6 — CÁLCULO DE CARGA Y CARGA INICIAL
+// ============================================================
+
+// a) Vaciar resultados previos en mochila
+let resultadosEnMochila = contarUnidadesSinHue(player.backpack!.serial, def.resultGraphic);
+if (resultadosEnMochila > 0) {
+  cfg(`Enviando ${resultadosEnMochila} resultado(s) previos al destino...`);
+  moverUnidadesSinHue(player.backpack!.serial, serialDestino, def.resultGraphic, resultadosEnMochila);
+  sleep(CFG.SLEEP_MOVE);
+}
+
+// b) Cargar herramientas de fabricación si faltan
+const herramientasYaEnMochila = contarUnidades(player.backpack!.serial, def.herramientaFabricacionGraphic, def.herramientaFabricacionHue);
+if (herramientasYaEnMochila < CFG.HERRAMIENTAS_EN_MOCHILA) {
+  const faltan = CFG.HERRAMIENTAS_EN_MOCHILA - herramientasYaEnMochila;
+  const dispHerr = contarUnidades(serialBolsaHerramientas, def.herramientaFabricacionGraphic, def.herramientaFabricacionHue);
+  const cabenPorPeso = Math.floor(pesoLibre() / def.herramientaFabricacionPeso);
+  const aMover = Math.min(faltan, dispHerr, cabenPorPeso);
+  if (aMover > 0) {
+    moverUnidades(serialBolsaHerramientas, player.backpack!.serial, def.herramientaFabricacionGraphic, aMover, def.herramientaFabricacionHue);
+  }
+}
+if (contarUnidades(player.backpack!.serial, def.herramientaFabricacionGraphic, def.herramientaFabricacionHue) === 0) {
+  err("No hay herramientas de fabricación disponibles. Macro detenida."); exit();
+}
+
+// c) Cargar materiales para cada recurso.
+//
+// Lógica de peso:
+//   El peso disponible para materiales es el peso libre actual menos
+//   el peso del resultado (se reserva para cuando esté fabricado y
+//   aún no se haya movido al destino) y menos el peso de los recursos
+//   de iteraciones anteriores ya cargados.
+//
+//   Se calcula cuántos crafts completos caben con el peso disponible
+//   y se carga material para ese número de crafts.
+//   Si solo cabe material para 1 craft, se carga para 1.
+//   Solo para si NO hay suficiente material ni para 1 craft.
+
+const nivelObjetivo: number[] = new Array(def.recursos.length).fill(0);
+
+// Primero calcular cuántos crafts caben con el peso libre total,
+// considerando TODOS los recursos a la vez (multi-recurso).
+// pesoTotalPorCraft = suma del peso de cada recurso * su cantidad
+const pesoTotalPorCraft = def.recursos.reduce((acc, r) => acc + r.peso * r.cantidad, 0);
+const pesoDisponibleTotal = pesoLibre() - def.resultPeso;
+
+if (pesoDisponibleTotal < pesoTotalPorCraft) {
+  // No cabe ni un craft — calcular cuánto material ya hay en mochila
+  // para ver si aun así podemos hacer alguno con lo que hay
+  const craftsPosiblesPorMochila = def.recursos.reduce((min, r) => {
+    const enMochila = contarUnidades(player.backpack!.serial, r.graphic, r.hue);
+    return Math.min(min, Math.floor(enMochila / r.cantidad));
+  }, Infinity);
+
+  if (craftsPosiblesPorMochila < 1) {
+    err(`Peso libre insuficiente para cargar material de un craft completo.`);
+    err(`Necesitas ${pesoTotalPorCraft.toFixed(1)} libres, tienes ${pesoDisponibleTotal.toFixed(1)}.`);
+    exit();
+  }
+  // Hay material en mochila para al menos 1 craft — continuar sin cargar más
+  cfg(`Peso justo. Usando material ya en mochila (${craftsPosiblesPorMochila} craft/s posibles).`);
+  for (let i = 0; i < def.recursos.length; i++) {
+    nivelObjetivo[i] = contarUnidades(player.backpack!.serial, def.recursos[i].graphic, def.recursos[i].hue);
+  }
+} else {
+  // Caben crafts — calcular cuántos y cargar material para ese número
+  const craftsACubrir = Math.max(1, Math.floor(pesoDisponibleTotal / pesoTotalPorCraft));
+  cfg(`Cargando material para ${craftsACubrir} craft/s...`);
+
+  for (let i = 0; i < def.recursos.length; i++) {
+    const r = def.recursos[i];
+    const yaEnMochila = contarUnidades(player.backpack!.serial, r.graphic, r.hue);
+    const objetivo = craftsACubrir * r.cantidad;
+    const aCargar = Math.max(0, objetivo - yaEnMochila);
+
+    if (aCargar > 0) {
+      const dispEnBolsa = contarUnidades(serialPorRecurso[i], r.graphic, r.hue);
+      const aMover = Math.min(aCargar, dispEnBolsa);
+      if (aMover > 0) {
+        moverUnidades(serialPorRecurso[i], player.backpack!.serial, r.graphic, aMover, r.hue);
+      }
+    }
+
+    nivelObjetivo[i] = contarUnidades(player.backpack!.serial, r.graphic, r.hue);
+
+    if (nivelObjetivo[i] < r.cantidad) {
+      err(`${r.nombre} insuficiente (${nivelObjetivo[i]}/${r.cantidad}). Macro detenida.`);
+      exit();
+    }
+
+    cfg(`${r.nombre}: ${nivelObjetivo[i]} unidades listas.`);
+  }
+}
+
+
+// ============================================================
+// BLOQUE 7 — NAVEGAR EL MENÚ UNA VEZ
+// ============================================================
+
+function abrirMenu(): any {
+  const candidatos = client.findAllItemsOfType(def.herramientaFabricacionGraphic, null, player.backpack, null, 0);
+  const h = candidatos.find(it => it.hue === def.herramientaFabricacionHue) ?? null;
+  if (!h) { err("Sin herramienta de fabricación en mochila."); return null; }
+  player.use(h);
+  return Gump.findOrWait(CFG.GUMP_TINKERING, CFG.SLEEP_GUMP);
+}
+
+const gump1 = abrirMenu();
+if (!gump1 || !gump1.exists) { err("No se abrió el menú de fabricación."); exit(); }
+
+gump1.reply(def.categoriaId);
+sleep(CFG.SLEEP_NAV);
+
+if (def.paginaSiguiente) {
+  const gumpPag = Gump.findOrWait(CFG.GUMP_TINKERING, 2000);
+  if (!gumpPag || !gumpPag.exists) { err("No se pudo navegar a la página siguiente."); exit(); }
+  gumpPag.reply(CFG.BTN_SIGUIENTE);
+  sleep(CFG.SLEEP_NAV);
+}
+
+const gump2 = Gump.findOrWait(CFG.GUMP_TINKERING, 2000);
+if (!gump2 || !gump2.exists) { err("El menú desapareció al seleccionar categoría."); exit(); }
+
+gump2.reply(def.herramientaId);
+sleep(CFG.SLEEP_NAV);
+
+
+// ============================================================
+// BLOQUE 8 — REPOSICIÓN MULTI-RECURSO
+// ============================================================
+
+function reponerHerramientasFabricacion(): boolean {
+  const enMochila = contarUnidades(player.backpack!.serial, def.herramientaFabricacionGraphic, def.herramientaFabricacionHue);
+  if (enMochila >= CFG.HERRAMIENTAS_EN_MOCHILA) return true;
+  const faltan = CFG.HERRAMIENTAS_EN_MOCHILA - enMochila;
+  const disponibles = contarUnidades(serialBolsaHerramientas, def.herramientaFabricacionGraphic, def.herramientaFabricacionHue);
+  if (disponibles === 0) return enMochila > 0;
+  const cabenPorPeso = Math.floor(pesoLibre() / def.herramientaFabricacionPeso);
+  const aMover = Math.min(faltan, disponibles, cabenPorPeso);
+  if (aMover > 0) {
+    moverUnidades(serialBolsaHerramientas, player.backpack!.serial, def.herramientaFabricacionGraphic, aMover, def.herramientaFabricacionHue);
+  }
+  return contarUnidades(player.backpack!.serial, def.herramientaFabricacionGraphic, def.herramientaFabricacionHue) > 0;
+}
+
+function reponerRecurso(i: number): boolean {
+  const r = def.recursos[i];
+  const enMochila = contarUnidades(player.backpack!.serial, r.graphic, r.hue);
+  if (enMochila >= nivelObjetivo[i]) return true;
+  const disponible = contarUnidades(serialPorRecurso[i], r.graphic, r.hue);
+  if (disponible === 0) return enMochila >= r.cantidad;
+  const faltan = nivelObjetivo[i] - enMochila;
+  const pesoDisponible = pesoLibre() - def.resultPeso;
+  const cabenPorPeso = Math.max(0, Math.floor(pesoDisponible / r.peso));
+  const aMover = Math.min(faltan, disponible, cabenPorPeso);
+  if (aMover > 0) {
+    moverUnidades(serialPorRecurso[i], player.backpack!.serial, r.graphic, aMover, r.hue);
+  }
+  return contarUnidades(player.backpack!.serial, r.graphic, r.hue) >= r.cantidad;
+}
+
+function reponerTodosLosMateriales(): boolean {
+  for (let i = 0; i < def.recursos.length; i++) {
+    if (!reponerRecurso(i)) return false;
+  }
+  return true;
+}
+
+function hayMaterialSuficienteParaCraft(): boolean {
+  for (const r of def.recursos) {
+    if (contarUnidades(player.backpack!.serial, r.graphic, r.hue) < r.cantidad) return false;
+  }
+  return true;
+}
+
+
+// ============================================================
+// BLOQUE 9 — BUCLE DE FABRICACIÓN
+// ============================================================
+
+let fabricadas = 0;
+
+while (true) {
+
+  // Parar si SUBIR_HABILIDAD está activo y Tinkering llegó a 100.0
+  if (SUBIR_HABILIDAD) {
+    const tinker = player.getSkill(Skills.Tinkering);
+    if (tinker && tinker.value >= 1000) {
+      cfg("¡Tinkering al 100.0! Macro detenida.");
+      break;
+    }
+  }
+
+  const ocupado = contarUnidadesSinHue(serialDestino, def.resultGraphic);
+  if (ocupado >= CFG.LIMITE_CONTENEDOR) break;
+
+  if (!reponerHerramientasFabricacion()) break;
+  if (!reponerTodosLosMateriales()) break;
+  if (!hayMaterialSuficienteParaCraft()) break;
+
+  checkWorldSave();
+
+  const candidatosH = client.findAllItemsOfType(def.herramientaFabricacionGraphic, null, player.backpack, null, 0);
+  const h = candidatosH.find(it => it.hue === def.herramientaFabricacionHue) ?? null;
+  if (!h) { err("Herramienta desapareció de la mochila."); break; }
+
+  player.use(h);
+  const gump = Gump.findOrWait(CFG.GUMP_TINKERING, 3000);
+  if (!gump || !gump.exists) {
+    err("No se pudo reabrir el menú. Reintentando...");
+    sleep(1000);
+    continue;
+  }
+
+  // Snapshot de materiales antes de fabricar (para detectar consumo = fallo de craft)
+  const snapshotAntes = def.recursos.map(r =>
+    contarUnidades(player.backpack!.serial, r.graphic, r.hue)
+  );
+
+  journal.clear();
+  gump.reply(CFG.BTN_FABRICAR_ULTIMO);
+
+  const resp = journal.waitForTextAny(TODOS_MSGS_CRAFT, undefined, CFG.TIMEOUT_CRAFT);
+
+  if (resp !== null && JOURNAL_FABRICACION.SIN_MATERIAL.some(m => resp.includes(m))) {
+    break;
+  }
+
+  const todosResultados = client.findAllItemsOfType(def.resultGraphic, null, player.backpack, null, 0);
+  const fabricado = todosResultados.length > 0 ? todosResultados[0] : null;
+
+  if (fabricado) {
+    fabricadas++;
+    player.moveItem(fabricado, { serial: serialDestino }, 0, 0, 0, 1);
+    sleep(CFG.SLEEP_MOVE);
+    continue;
+  }
+
+  // Sin resultado: comprobar si se consumió material (fallo craft) o no (timeout)
+  const seConsumioBien = def.recursos.some((r, i) =>
+    contarUnidades(player.backpack!.serial, r.graphic, r.hue) < snapshotAntes[i]
+  );
+
+  if (seConsumioBien) {
+    sleep(500);
+    continue;
+  }
+
+  err("Sin respuesta del servidor. Reintentando...");
+  sleep(1000);
+}
+
+cfg(`Finalizado. Herramientas fabricadas: ${fabricadas}.`);
