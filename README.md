@@ -2,7 +2,8 @@
 Colección organizada de macros para ClienteWeb, diseñadas para automatizar tareas comunes en Ultima Alianza (Ultima Online).  
 
 ## 📁 Estructura del repositorio
-```⚙️ Macros
+```
+⚙️ Macros
 ├── 🔥combate
 ├── ⚔️Entrenamiento
 ├── ⛏️Recoleccion
