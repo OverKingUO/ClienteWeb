@@ -1,0 +1,477 @@
+// ============================================================
+// MACRO: Carpintería automática — Ultima Alianza
+// Versión: 1.0
+// Autor: Barack Segoviain + Claude
+//
+// ¿QUÉ HACE?
+//   Fabrica pergaminos o mapas en bucle usando el serrucho.
+//   El menú se abre con doble clic en el serrucho (no se equipa).
+//   La primera vez navega Otros → item. Las siguientes usan
+//   "Fabricar Último" directamente sin renavegar el menú.
+//   En modo macreo para al llegar a 100.0 de Carpentry.
+//
+// PASOS DE CONFIGURACIÓN:
+//   1/3 — Bolsa con serruchos
+//   2/3 — Bolsa con troncos normales (hue 0x0)
+//   3/3 — Bolsa destino para los items fabricados
+//   (En modo macreo solo hay 2 pasos — no hay bolsa destino)
+//
+// PESO:
+//   Tronco:    2.0 por unidad (se consume al fabricar)
+//   Serrucho:  2.0 (0x1034) ó 1.0 (0x1028) — no se consume
+//   Resultado: 1.0 por unidad (pergamino o mapa)
+//   La macro calcula cuántos troncos caben en mochila reservando
+//   siempre espacio para los resultados que irá acumulando antes
+//   de descargar.
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+
+// ¿Qué fabricar?
+//   1 — Mapas        (25.0 Carpentry, 4 troncos/ud)
+//   2 — Pergaminos   (40.0 Carpentry, 4 troncos/ud)
+const FABRICAR = 2;
+
+// ¿Modo macreo? (para al llegar a 100.0 de Carpentry)
+//   "SI" — activa modo macreo
+//   "NO" — fabrica hasta quedarse sin troncos o espacio en destino
+const MACREO = "NO";
+
+
+// ============================================================
+// BLOQUE 2 — CONSTANTES INTERNAS (NO MODIFICAR)
+// ============================================================
+
+const GUMP_CARPINTERIA  = 0x463;
+const BTN_CATEGORIA_OTROS = 7;
+const BTN_FABRICAR_ULTIMO = 508;
+
+// Troncos normales
+const TRONCO_GRAPHIC = 0x1BDD;
+const TRONCO_HUE     = 0x0;
+const TRONCO_PESO    = 2.0;
+const TRONCOS_POR_CRAFT = 4;
+
+// Herramientas válidas (serrucho normal y serrucho alternativo)
+const SERRUCHOS = [
+  { graphic: 0x1034, hue: 0x0, peso: 2.0, nombre: "serrucho" },
+  { graphic: 0x1028, hue: 0x0, peso: 1.0, nombre: "serrucho (alt)" },
+];
+
+// Catálogo de items
+const ITEMS: Record<number, {
+  nombre:       string;
+  gumpId:       number;
+  skillMinima:  number;
+  resultGraphic:number;
+  resultHue:    number;
+  resultPeso:   number;
+}> = {
+  1: {
+    nombre:        "Mapa",
+    gumpId:        605,
+    skillMinima:   25.0,
+    resultGraphic: 0xE34,
+    resultHue:     0x50,
+    resultPeso:    1.0,
+  },
+  2: {
+    nombre:        "Pergamino",
+    gumpId:        604,
+    skillMinima:   40.0,
+    resultGraphic: 0xE34,
+    resultHue:     0x30,
+    resultPeso:    1.0,
+  },
+};
+
+const CARPENTRY_SKILL_MAX = 1000; // 100.0 * 10
+const SLEEP_GUMP   = 1500;
+const SLEEP_NAV    = 600;
+const SLEEP_MOVE   = 600;
+const TIMEOUT_GUMP = 4000;
+const TIMEOUT_CRAFT = 8000;
+
+const MARGEN_PESO = 10; // peso libre que siempre se reserva
+
+// Textos del journal de UA
+const JOURNAL_OK      = ["pones", "has fabricado", "creas", "colocas"];
+const JOURNAL_FALLO   = ["fallas", "no has podido"];
+const JOURNAL_SIN_MAT = ["no tienes", "no tienes los recursos", "no tienes suficiente"];
+const TODOS_MSGS      = [...JOURNAL_OK, ...JOURNAL_FALLO, ...JOURNAL_SIN_MAT];
+
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN    = "Comienza la grabacion de las bases de datos";
+
+
+// ============================================================
+// BLOQUE 3 — VALIDACIÓN
+// ============================================================
+
+function cfg(msg: string): void { client.sysMsg(`[CARPINTERIA] ${msg}`, 0x44); }
+function err(msg: string): void { client.sysMsg(`[CARPINTERIA] ⚠ ${msg}`, 0x26); }
+
+if (!ITEMS[FABRICAR]) {
+  err(`FABRICAR debe ser 1 (Mapas) o 2 (Pergaminos). Valor actual: ${FABRICAR}`);
+  exit();
+}
+
+const def       = ITEMS[FABRICAR];
+const modoMacreo = MACREO.toUpperCase() === "SI";
+
+const carpSkill = player.getSkill(Skills.Carpentry);
+if (!carpSkill || carpSkill.value / 10 < def.skillMinima) {
+  err(`Carpentry insuficiente. Tienes ${carpSkill ? (carpSkill.value / 10).toFixed(1) : 0}, necesitas ${def.skillMinima}.`);
+  exit();
+}
+
+cfg(`Fabricar: ${def.nombre} | Modo macreo: ${modoMacreo ? "SÍ" : "NO"}`);
+
+
+// ============================================================
+// BLOQUE 4 — GESTIÓN DE CONTENEDORES
+// ============================================================
+
+const bolsasAbiertas: Set<number> = new Set();
+
+// Pre-cargar contenedores ya abiertos antes de pedir selecciones al usuario.
+// Evita reabrir el padre si el usuario ya lo tenía abierto, lo que cerraría los hijos.
+function precargarContenedoresAbiertos(): void {
+  if (!player.backpack) return;
+  const recorrer = (items: any[]) => {
+    for (const it of items) {
+      if (Array.isArray(it.contents) && it.contents.length > 0) {
+        bolsasAbiertas.add(it.serial);
+        recorrer(it.contents);
+      }
+    }
+  };
+  recorrer((player.backpack as any).contents ?? []);
+}
+precargarContenedoresAbiertos();
+
+function abrirSiNecesario(serial: number): void {
+  if (bolsasAbiertas.has(serial)) return;
+  player.use(serial);
+  sleep(SLEEP_GUMP);
+  bolsasAbiertas.add(serial);
+}
+
+function contarUnidades(serial: number, graphic: number, hue: number): number {
+  // findAllItemsOfType trata hue=0 igual que null (sin filtro).
+  // Buscamos sin filtro y filtramos manualmente para garantizar hue exacto.
+  const items = client.findAllItemsOfType(graphic, null, { serial }, null, 0);
+  return items.filter(it => it.hue === hue).reduce((a, it) => a + it.amount, 0);
+}
+
+function contarSerruchos(serial: number): number {
+  let total = 0;
+  for (const s of SERRUCHOS) total += contarUnidades(serial, s.graphic, s.hue);
+  return total;
+}
+
+function pedirBolsaConContenido(paso: string, validar: (serial: number) => boolean, contar: (serial: number) => number, descripcion: string): number {
+  while (true) {
+    cfg(`${paso} — Haz clic en ${descripcion}...`);
+    const t = target.query(false);
+    if (!t?.serial) { err("Selección cancelada."); exit(); }
+    abrirSiNecesario(t.serial);
+
+    const cantidad = contar(t.serial);
+
+    if (cantidad === 0) {
+      err(`Esa bolsa no tiene ${descripcion.replace("la bolsa con ", "")}. Selecciona la correcta...`);
+      continue;
+    }
+
+    if (cantidad === 1) {
+      err(`⚠ Solo hay 1 unidad de ${descripcion.replace("la bolsa con ", "")} en ese contenedor.`);
+      err(`Si te has equivocado de bolsa, haz clic en la correcta. Si es la correcta, haz clic en ella de nuevo.`);
+      // Esperar que el usuario seleccione otro contenedor o el mismo
+      const t2 = target.query(false);
+      if (!t2?.serial) { err("Selección cancelada."); exit(); }
+      abrirSiNecesario(t2.serial);
+      const cantidad2 = contar(t2.serial);
+      if (cantidad2 === 0) {
+        err(`Esa bolsa tampoco tiene el item. Volviendo a pedir selección...`);
+        continue;
+      }
+      if (cantidad2 === 1) {
+        err(`⚠ Solo hay 1 unidad. Continuando con este contenedor.`);
+      }
+      return t2.serial;
+    }
+
+    return t.serial;
+  }
+}
+
+function pedirBolsaAbierta(paso: string, descripcion: string): number {
+  cfg(`${paso} — Haz clic en ${descripcion}...`);
+  const t = target.query(false);
+  if (!t?.serial) { err("Selección cancelada."); exit(); }
+  abrirSiNecesario(t.serial);
+  return t.serial;
+}
+
+
+// ============================================================
+// BLOQUE 5 — SELECCIÓN DE BOLSAS
+// ============================================================
+
+const TOTAL_PASOS = modoMacreo ? 2 : 3;
+
+const serialBolsaSerruchos = pedirBolsaConContenido(
+  `1/${TOTAL_PASOS}`,
+  s => contarSerruchos(s) > 0,
+  s => contarSerruchos(s),
+  "la bolsa con serruchos"
+);
+
+const serialBolsaTroncos = pedirBolsaConContenido(
+  `2/${TOTAL_PASOS}`,
+  s => contarUnidades(s, TRONCO_GRAPHIC, TRONCO_HUE) > 0,
+  s => contarUnidades(s, TRONCO_GRAPHIC, TRONCO_HUE),
+  "la bolsa con troncos normales (hue 0x0)"
+);
+
+let serialDestino = 0;
+if (!modoMacreo) {
+  serialDestino = pedirBolsaAbierta(
+    `3/${TOTAL_PASOS}`,
+    "el contenedor DESTINO para los items fabricados"
+  );
+}
+
+
+// ============================================================
+// BLOQUE 6 — UTILIDADES
+// ============================================================
+
+function checkWorldSave(): void {
+  if (journal.containsText(WS_AVISO)) {
+    cfg("Save en 1 min. Pausando...");
+    journal.clear();
+    journal.waitForText(WS_INICIO, undefined, 90000);
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    cfg("Save terminado. Continuando.");
+    journal.clear();
+    sleep(3000);
+    return;
+  }
+  if (journal.containsText(WS_INICIO)) {
+    cfg("Save en curso. Esperando fin...");
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    cfg("Save terminado. Continuando.");
+    journal.clear();
+    sleep(3000);
+  }
+}
+
+function pesoLibre(): number {
+  return Math.max(0, player.weightMax - player.weight - MARGEN_PESO);
+}
+
+// ── Serrucho ──────────────────────────────────────────────────
+
+function obtenerSerrucho(): Item | null {
+  for (const s of SERRUCHOS) {
+    const found = client.findType(s.graphic, null, player.backpack, null, 0) as Item | null;
+    if (found && found.hue === s.hue) return found;
+  }
+  return null;
+}
+
+function reponerSerrucho(): boolean {
+  if (obtenerSerrucho()) return true;
+
+  cfg("Sin serrucho en mochila. Cogiendo de la bolsa...");
+  for (const s of SERRUCHOS) {
+    const todos = client.findAllItemsOfType(s.graphic, null, { serial: serialBolsaSerruchos }, null, 0) as Item[];
+    const item = todos.find(it => it.hue === s.hue);
+    if (item) {
+      player.moveItem(item, player.backpack!, 0, 0, 0, 1);
+      sleep(SLEEP_MOVE);
+      if (obtenerSerrucho()) { cfg("Serrucho repuesto."); return true; }
+    }
+  }
+
+  err("Sin serruchos disponibles. Macro detenida.");
+  return false;
+}
+
+// ── Troncos ───────────────────────────────────────────────────
+
+function reponerTroncos(): boolean {
+  const enMochila = contarUnidades(player.backpack!.serial, TRONCO_GRAPHIC, TRONCO_HUE);
+
+  // Peso disponible para troncos = peso libre menos lo que pesarán los resultados
+  // que se irán acumulando. Reservamos espacio para 20 resultados como margen.
+  const pesoReservaResultados = 20 * def.resultPeso;
+  const pesoParaTroncos = Math.max(0, pesoLibre() - pesoReservaResultados);
+  const maxTroncos = Math.floor(pesoParaTroncos / TRONCO_PESO);
+
+  if (enMochila >= TRONCOS_POR_CRAFT) return true; // ya hay suficientes
+  if (maxTroncos < TRONCOS_POR_CRAFT) {
+    // No caben más troncos — vaciar resultados primero
+    return false;
+  }
+
+  const faltan = Math.max(0, maxTroncos - enMochila);
+  if (faltan === 0) return enMochila >= TRONCOS_POR_CRAFT;
+
+  const enBolsa = contarUnidades(serialBolsaTroncos, TRONCO_GRAPHIC, TRONCO_HUE);
+  if (enBolsa === 0) return enMochila >= TRONCOS_POR_CRAFT;
+
+  const aMover = Math.min(faltan, enBolsa);
+  const todos = client.findAllItemsOfType(TRONCO_GRAPHIC, null, { serial: serialBolsaTroncos }, null, 0) as Item[];
+  const tronco = todos.find(it => it.hue === TRONCO_HUE);
+  if (tronco) {
+    player.moveItem(tronco, player.backpack!, 0, 0, 0, aMover);
+    sleep(SLEEP_MOVE);
+  }
+
+  return contarUnidades(player.backpack!.serial, TRONCO_GRAPHIC, TRONCO_HUE) >= TRONCOS_POR_CRAFT;
+}
+
+// ── Descargar resultados ──────────────────────────────────────
+
+function descargarResultados(): void {
+  if (modoMacreo) return; // en modo macreo no hay destino
+  const items = client.findAllItemsOfType(def.resultGraphic, null, player.backpack, null, 0) as Item[];
+  const aDescargar = items.filter(it => it.hue === def.resultHue);
+  for (const it of aDescargar) {
+    player.moveItem(it, { serial: serialDestino }, 0, 0, 0, it.amount);
+    sleep(SLEEP_MOVE);
+  }
+}
+
+
+// ============================================================
+// BLOQUE 7 — CRAFTEO
+// ============================================================
+
+// Primera vez: navega Otros → item específico.
+// Siguientes: usa Fabricar Último directamente.
+let primeraVez = true;
+
+function craftear(): 'exito' | 'fallo' | 'sin_material' | 'sin_serrucho' {
+  if (!reponerSerrucho()) return 'sin_serrucho';
+  if (!reponerTroncos()) return 'sin_material';
+
+  const serrucho = obtenerSerrucho();
+  if (!serrucho) return 'sin_serrucho';
+
+  if (primeraVez) {
+    // ── Primera vez: navegar menú completo ──
+    player.use(serrucho);
+    let gump = Gump.findOrWait(GUMP_CARPINTERIA, TIMEOUT_GUMP);
+    if (!gump?.exists) { err("No se abrió el menú de Carpintería."); return 'fallo'; }
+
+    gump.reply(BTN_CATEGORIA_OTROS);
+    sleep(SLEEP_NAV);
+    gump = Gump.findOrWait(GUMP_CARPINTERIA, TIMEOUT_GUMP);
+    if (!gump?.exists) { err("El menú desapareció al elegir Otros."); return 'fallo'; }
+
+    journal.clear();
+    checkWorldSave();
+    gump.reply(def.gumpId);
+
+    const resp = journal.waitForTextAny(TODOS_MSGS, undefined, TIMEOUT_CRAFT);
+    if (resp === null) return 'fallo';
+    if (JOURNAL_SIN_MAT.some(m => resp.includes(m))) return 'sin_material';
+    if (JOURNAL_OK.some(m => resp.includes(m))) {
+      primeraVez = false;
+      return 'exito';
+    }
+    return 'fallo';
+
+  } else {
+    // ── Siguientes: Fabricar Último ──
+    player.use(serrucho);
+    const gump = Gump.findOrWait(GUMP_CARPINTERIA, TIMEOUT_GUMP);
+    if (!gump?.exists) { err("No se abrió el menú para Fabricar Último."); return 'fallo'; }
+
+    journal.clear();
+    checkWorldSave();
+    gump.reply(BTN_FABRICAR_ULTIMO);
+
+    const resp = journal.waitForTextAny(TODOS_MSGS, undefined, TIMEOUT_CRAFT);
+    if (resp === null) return 'fallo';
+    if (JOURNAL_SIN_MAT.some(m => resp.includes(m))) return 'sin_material';
+    if (JOURNAL_OK.some(m => resp.includes(m))) return 'exito';
+    return 'fallo';
+  }
+}
+
+
+// ============================================================
+// BLOQUE 8 — BUCLE PRINCIPAL
+// ============================================================
+
+cfg(`Iniciando fabricación de ${def.nombre}...`);
+let fabricados = 0;
+let fallosConsecutivos = 0;
+const MAX_FALLOS = 5;
+
+while (true) {
+
+  // ── Skill cap en modo macreo ──
+  if (modoMacreo) {
+    const sk = player.getSkill(Skills.Carpentry);
+    if (sk && sk.value >= CARPENTRY_SKILL_MAX) {
+      cfg(`Carpentry 100.0 alcanzado. Macro detenida. Total fabricados: ${fabricados}`);
+      break;
+    }
+  }
+
+  checkWorldSave();
+
+  // Descargar resultados si hay poco espacio para más troncos
+  const espacioParaTroncos = Math.floor(pesoLibre() / TRONCO_PESO);
+  if (espacioParaTroncos < TRONCOS_POR_CRAFT && !modoMacreo) {
+    descargarResultados();
+    sleep(500);
+    continue;
+  }
+
+  const resultado = craftear();
+
+  switch (resultado) {
+    case 'exito':
+      fabricados++;
+      fallosConsecutivos = 0;
+      break;
+
+    case 'fallo':
+      fallosConsecutivos++;
+      if (fallosConsecutivos >= MAX_FALLOS) {
+        err(`${MAX_FALLOS} fallos consecutivos. Macro detenida.`);
+        exit();
+      }
+      sleep(1000);
+      break;
+
+    case 'sin_material':
+      // Intentar descargar y reponer
+      if (!modoMacreo) descargarResultados();
+      const puedeContinuar = reponerTroncos();
+      if (!puedeContinuar) {
+        err(`Sin troncos. Total fabricados: ${fabricados}`);
+        exit();
+      }
+      break;
+
+    case 'sin_serrucho':
+      err(`Sin serruchos. Total fabricados: ${fabricados}`);
+      exit();
+  }
+}
+
+cfg(`Macro finalizada. Total ${def.nombre}s fabricados: ${fabricados}`);
