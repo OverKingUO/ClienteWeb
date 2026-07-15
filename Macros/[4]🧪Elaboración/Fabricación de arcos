@@ -1,0 +1,450 @@
+// ============================================================
+// MACRO: Bowcraft automático — Ultima Alianza
+// Versión: 1.0
+// Autor: Barack Segoviain
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+
+// ¿Qué fabricar?
+//   0 — Astiles       (para macrear, skill desde 9.8)
+//   1 — Arcos superiores (skill desde 45.0, 8 troncos c/u)
+const FABRICAR = 0;
+
+// ¿Modo macreo? La macro se detiene al llegar a 100.0 de Bowcraft.
+//   "SI" — activa modo macreo
+//   "NO" — fabrica hasta quedarse sin troncos o espacio en destino
+const MACREO = "NO";
+
+
+// ============================================================
+// BLOQUE 2 — CONSTANTES INTERNAS (NO MODIFICAR)
+// ============================================================
+
+const GUMP_BOWCRAFT     = 0x463;
+const BTN_FABRICAR_ULTIMO = 508;
+
+// Troncos normales
+const TRONCO_GRAPHIC = 0x1BDD;
+const TRONCO_HUE     = 0x0;
+const TRONCO_PESO    = 2.0;
+
+// Daga (herramienta de bowcraft)
+const DAGA_GRAPHIC = 0xF51;
+const DAGA_HUE     = 0x0;
+const DAGA_PESO    = 4.0;
+
+// Catálogo de items
+const ITEMS: Record<number, {
+  nombre:         string;
+  btnCategoria:   number;   // botón de categoría en el menú
+  btnItem:        number;   // botón del item dentro de la categoría
+  skillMinima:    number;
+  troncosPorCraft:number;
+  resultGraphic:  number;
+  resultHue:      number;
+  resultPeso:     number;
+}> = {
+  0: {
+    nombre:          "Astil",
+    btnCategoria:    1,      // Materiales
+    btnItem:         602,
+    skillMinima:     9.8,
+    troncosPorCraft: 1,
+    resultGraphic:   0x1BD4,
+    resultHue:       0x0,
+    resultPeso:      0.1,
+  },
+  1: {
+    nombre:          "Arco Superior",
+    btnCategoria:    3,      // Armas
+    btnItem:         606,
+    skillMinima:     45.0,
+    troncosPorCraft: 8,
+    resultGraphic:   0x13B1,
+    resultHue:       0x0,
+    resultPeso:      2.8,
+  },
+};
+
+const BOWCRAFT_SKILL_MAX = 1000; // 100.0 * 10
+const SLEEP_GUMP    = 1500;
+const SLEEP_NAV     = 600;
+const SLEEP_MOVE    = 600;
+const TIMEOUT_GUMP  = 4000;
+const TIMEOUT_CRAFT = 8000;
+const MARGEN_PESO   = 10;
+const DAGAS_REPUESTO = 2;  // dagas mínimas que queremos en mochila
+const BUFFER_TRONCOS = 30; // troncos que intentamos tener en mochila
+
+const JOURNAL_OK      = ["pones", "has fabricado", "creas", "colocas"];
+const JOURNAL_FALLO   = ["fallas", "no has podido"];
+const JOURNAL_SIN_MAT = ["no tienes", "no tienes los recursos", "no tienes suficiente"];
+const TODOS_MSGS      = [...JOURNAL_OK, ...JOURNAL_FALLO, ...JOURNAL_SIN_MAT];
+
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN    = "Comienza la grabacion de las bases de datos";
+let _wsUltimoAviso  = 0;
+let _wsUltimoInicio = 0;
+
+
+// ============================================================
+// BLOQUE 3 — VALIDACIÓN
+// ============================================================
+
+function cfg(msg: string): void { client.sysMsg(`[BOWCRAFT] ${msg}`, 0x44); }
+function err(msg: string): void { client.sysMsg(`[BOWCRAFT] ⚠ ${msg}`, 0x26); }
+
+if (ITEMS[FABRICAR] === undefined) {
+  err(`FABRICAR debe ser 0 (Astiles) o 1 (Arcos superiores). Valor actual: ${FABRICAR}`);
+  exit();
+}
+
+const def        = ITEMS[FABRICAR];
+const modoMacreo = MACREO.toUpperCase() === "SI";
+
+const bowSkill = player.getSkill(Skills.Fletching);
+if (!bowSkill || bowSkill.value / 10 < def.skillMinima) {
+  err(`Bowcraft insuficiente. Tienes ${bowSkill ? (bowSkill.value / 10).toFixed(1) : 0}, necesitas ${def.skillMinima}.`);
+  exit();
+}
+
+cfg(`Fabricar: ${def.nombre} | Modo macreo: ${modoMacreo ? "SÍ" : "NO"}`);
+
+
+// ============================================================
+// BLOQUE 4 — GESTIÓN DE CONTENEDORES
+// ============================================================
+
+const _bolsasAbiertas: Set<number> = new Set();
+const _bolsasSeleccionadas: Set<number> = new Set();
+
+function abrirContenedor(serial: number): void {
+  player.use(serial);
+  sleep(SLEEP_GUMP);
+  _bolsasAbiertas.add(serial);
+}
+
+function contarUnidades(serial: number, graphic: number, hue: number): number {
+  const items = client.findAllItemsOfType(graphic, null, { serial }, null, 0) as Item[];
+  return items.filter(it => it.hue === hue).reduce((a, it) => a + it.amount, 0);
+}
+
+function contarDagas(serial: number): number {
+  return contarUnidades(serial, DAGA_GRAPHIC, DAGA_HUE);
+}
+
+function pedirBolsaConContenido(
+  paso: string,
+  contar: (s: number) => number,
+  descripcion: string
+): number {
+  while (true) {
+    cfg(`${paso} — Haz clic en ${descripcion}...`);
+    const t = target.query(false);
+    if (!t?.serial) { err("Selección cancelada."); exit(); }
+
+    // Abrir solo si no lo hemos abierto ni seleccionado antes
+    if (!_bolsasSeleccionadas.has(t.serial) && !_bolsasAbiertas.has(t.serial)) {
+      abrirContenedor(t.serial);
+    }
+    _bolsasSeleccionadas.add(t.serial);
+
+    if (contar(t.serial) > 0) return t.serial;
+    err(`Ahí no hay ${descripcion.replace("la bolsa con ", "")}. Selecciona la correcta...`);
+  }
+}
+
+function pedirBolsaAbierta(paso: string, descripcion: string): number {
+  cfg(`${paso} — Haz clic en ${descripcion}...`);
+  const t = target.query(false);
+  if (!t?.serial) { err("Selección cancelada."); exit(); }
+  if (!_bolsasSeleccionadas.has(t.serial) && !_bolsasAbiertas.has(t.serial)) {
+    abrirContenedor(t.serial);
+  }
+  _bolsasSeleccionadas.add(t.serial);
+  return t.serial;
+}
+
+
+// ============================================================
+// BLOQUE 5 — SELECCIÓN DE BOLSAS
+// ============================================================
+
+const TOTAL_PASOS = modoMacreo ? 2 : 3;
+
+const serialBolsaDagas = pedirBolsaConContenido(
+  `1/${TOTAL_PASOS}`,
+  contarDagas,
+  "la bolsa con dagas"
+);
+
+const serialBolsaTroncos = pedirBolsaConContenido(
+  `2/${TOTAL_PASOS}`,
+  s => contarUnidades(s, TRONCO_GRAPHIC, TRONCO_HUE),
+  "la bolsa con troncos normales"
+);
+
+let serialDestino = 0;
+if (!modoMacreo) {
+  serialDestino = pedirBolsaAbierta(
+    `3/${TOTAL_PASOS}`,
+    "el contenedor DESTINO para los items fabricados"
+  );
+}
+
+// Reapertura garantizada de todos los contenedores seteados
+for (const serial of Array.from(_bolsasSeleccionadas)) {
+  player.use(serial);
+  sleep(800);
+}
+
+
+// ============================================================
+// BLOQUE 6 — UTILIDADES
+// ============================================================
+
+function checkWorldSave(): void {
+  if (journal.containsText(WS_AVISO)) {
+    const ahora = Date.now();
+    if (ahora - _wsUltimoAviso > 10000) {
+      _wsUltimoAviso = ahora;
+      client.sysMsg("[BOWCRAFT] ⚠ Save en 1 min. Pausando en 40s...", 0x26);
+      sleep(40000);
+      journal.clear();
+      const inicioDetectado = journal.waitForText(WS_INICIO, undefined, 30000);
+      if (!inicioDetectado) {
+        client.sysMsg("[BOWCRAFT] ▶ Save no detectado. Continuando.", 0x44);
+        return;
+      }
+      journal.clear();
+      const finDetectado = journal.waitForText(WS_FIN, undefined, 300000);
+      client.sysMsg(finDetectado ? "[BOWCRAFT] ▶ Save terminado." : "[BOWCRAFT] ▶ Timeout 5min.", 0x44);
+      journal.clear();
+      sleep(2000);
+      return;
+    }
+  }
+  if (journal.containsText(WS_INICIO)) {
+    const ahora = Date.now();
+    if (ahora - _wsUltimoInicio > 10000) {
+      _wsUltimoInicio = ahora;
+      client.sysMsg("[BOWCRAFT] ⏸ Save en curso...", 0x26);
+      journal.clear();
+      const finDetectado = journal.waitForText(WS_FIN, undefined, 300000);
+      client.sysMsg(finDetectado ? "[BOWCRAFT] ▶ Save terminado." : "[BOWCRAFT] ▶ Timeout 5min.", 0x44);
+      journal.clear();
+      sleep(2000);
+    }
+  }
+}
+
+function pesoLibre(): number {
+  return Math.max(0, player.weightMax - player.weight - MARGEN_PESO);
+}
+
+// ── Dagas ─────────────────────────────────────────────────────
+
+function obtenerDagaEnMochila(): Item | null {
+  const items = client.findAllItemsOfType(DAGA_GRAPHIC, null, player.backpack, null, 0) as Item[];
+  return items.find(it => it.hue === DAGA_HUE) ?? null;
+}
+
+function reponerDagas(): boolean {
+  const enMochila = contarDagas(player.backpack!.serial);
+  if (enMochila >= DAGAS_REPUESTO) return true;
+
+  const faltan = DAGAS_REPUESTO - enMochila;
+  const enBolsa = contarDagas(serialBolsaDagas);
+  if (enBolsa === 0) return enMochila > 0;
+
+  const caben = Math.floor(pesoLibre() / DAGA_PESO);
+  const aMover = Math.min(faltan, enBolsa, caben);
+  if (aMover <= 0) return enMochila > 0;
+
+  const items = client.findAllItemsOfType(DAGA_GRAPHIC, null, { serial: serialBolsaDagas }, null, 0) as Item[];
+  const daga = items.find(it => it.hue === DAGA_HUE);
+  if (daga) {
+    player.moveItem(daga, player.backpack!, 0, 0, 0, aMover);
+    sleep(SLEEP_MOVE);
+  }
+  return contarDagas(player.backpack!.serial) > 0;
+}
+
+// ── Troncos ───────────────────────────────────────────────────
+
+function reponerTroncos(): boolean {
+  const enMochila = contarUnidades(player.backpack!.serial, TRONCO_GRAPHIC, TRONCO_HUE);
+  if (enMochila >= def.troncosPorCraft) return true;
+
+  // Calculamos cuántos troncos caben teniendo en cuenta que los resultados
+  // se acumularán en la mochila. Reservamos espacio para 20 resultados.
+  const pesoReservaResultados = 20 * def.resultPeso;
+  const pesoParaTroncos = Math.max(0, pesoLibre() - pesoReservaResultados);
+  const maxTroncos = Math.floor(pesoParaTroncos / TRONCO_PESO);
+
+  if (maxTroncos < def.troncosPorCraft) return false; // no caben ni para un craft
+
+  const objetivo = Math.min(maxTroncos, BUFFER_TRONCOS);
+  const faltan = Math.max(0, objetivo - enMochila);
+  if (faltan === 0) return enMochila >= def.troncosPorCraft;
+
+  const enBolsa = contarUnidades(serialBolsaTroncos, TRONCO_GRAPHIC, TRONCO_HUE);
+  if (enBolsa === 0) return enMochila >= def.troncosPorCraft;
+
+  const aMover = Math.min(faltan, enBolsa);
+  const todos = client.findAllItemsOfType(TRONCO_GRAPHIC, null, { serial: serialBolsaTroncos }, null, 0) as Item[];
+  const tronco = todos.find(it => it.hue === TRONCO_HUE);
+  if (tronco) {
+    player.moveItem(tronco, player.backpack!, 0, 0, 0, aMover);
+    sleep(SLEEP_MOVE);
+  }
+
+  return contarUnidades(player.backpack!.serial, TRONCO_GRAPHIC, TRONCO_HUE) >= def.troncosPorCraft;
+}
+
+// ── Descargar resultados ──────────────────────────────────────
+
+function descargarResultados(): void {
+  if (modoMacreo || serialDestino === 0) return;
+  const items = client.findAllItemsOfType(def.resultGraphic, null, player.backpack, null, 0) as Item[];
+  const aDescargar = items.filter(it => it.hue === def.resultHue);
+  for (const it of aDescargar) {
+    player.moveItem(it, { serial: serialDestino }, 0, 0, 0, it.amount);
+    sleep(SLEEP_MOVE);
+  }
+}
+
+
+// ============================================================
+// BLOQUE 7 — CRAFTEO
+// ============================================================
+//
+// Mecánica del bowcraft en UA:
+//   1. Doble clic en la daga (se equipa)
+//   2. El cliente pide que hagas clic en los troncos — target.wait + target.entity
+//   3. Se abre el gump de bowcraft (0x463)
+//   4. Primera vez: navegar categoría → item
+//   5. Siguientes: pulsar BTN_FABRICAR_ULTIMO (508) directamente
+//   El menú recuerda el último item — no hace falta renavegar.
+
+let primeraVez = true;
+
+function craftear(): 'exito' | 'fallo' | 'sin_material' | 'sin_daga' {
+  if (!reponerDagas()) return 'sin_daga';
+  if (!reponerTroncos()) return 'sin_material';
+
+  const daga = obtenerDagaEnMochila();
+  if (!daga) return 'sin_daga';
+
+  // Buscar troncos en mochila para el target
+  const todos = client.findAllItemsOfType(TRONCO_GRAPHIC, null, player.backpack, null, 0) as Item[];
+  const tronco = todos.find(it => it.hue === TRONCO_HUE);
+  if (!tronco) return 'sin_material';
+
+  // Paso 1: doble clic en la daga
+  player.use(daga);
+
+  // Paso 2: esperar target y apuntar a los troncos
+  const cursorAbierto = target.wait(3000);
+  if (!cursorAbierto) { err("La daga no abrió cursor de objetivo."); return 'fallo'; }
+  target.entity(tronco);
+
+  // Paso 3: esperar el gump
+  const gump = Gump.findOrWait(GUMP_BOWCRAFT, TIMEOUT_GUMP);
+  if (!gump?.exists) { err("No se abrió el menú de Bowcraft."); return 'fallo'; }
+
+  journal.clear();
+  checkWorldSave();
+
+  if (primeraVez) {
+    // Paso 4a: navegar categoría → item
+    gump.reply(def.btnCategoria);
+    sleep(SLEEP_NAV);
+    const gump2 = Gump.findOrWait(GUMP_BOWCRAFT, TIMEOUT_GUMP);
+    if (!gump2?.exists) { err("El menú desapareció al elegir categoría."); return 'fallo'; }
+
+    journal.clear();
+    gump2.reply(def.btnItem);
+  } else {
+    // Paso 4b: Fabricar Último directamente
+    gump.reply(BTN_FABRICAR_ULTIMO);
+  }
+
+  const resp = journal.waitForTextAny(TODOS_MSGS, undefined, TIMEOUT_CRAFT);
+  if (resp === null) return 'fallo';
+  if (JOURNAL_SIN_MAT.some(m => resp.includes(m))) return 'sin_material';
+  if (JOURNAL_OK.some(m => resp.includes(m))) {
+    primeraVez = false;
+    return 'exito';
+  }
+  return 'fallo';
+}
+
+
+// ============================================================
+// BLOQUE 8 — BUCLE PRINCIPAL
+// ============================================================
+
+cfg(`Iniciando fabricación de ${def.nombre}...`);
+let fabricados = 0;
+let fallosConsecutivos = 0;
+const MAX_FALLOS = 5;
+
+while (true) {
+
+  // Skill cap en modo macreo
+  if (modoMacreo) {
+    const sk = player.getSkill(Skills.Fletching);
+    if (sk && sk.value >= BOWCRAFT_SKILL_MAX) {
+      cfg(`Bowcraft 100.0 alcanzado. Macro detenida. Total fabricados: ${fabricados}`);
+      break;
+    }
+  }
+
+  checkWorldSave();
+
+  // Descargar resultados si hay poco espacio para más troncos
+  const espacioParaTroncos = Math.floor(pesoLibre() / TRONCO_PESO);
+  if (espacioParaTroncos < def.troncosPorCraft && !modoMacreo) {
+    descargarResultados();
+    sleep(500);
+    continue;
+  }
+
+  const resultado = craftear();
+
+  switch (resultado) {
+    case 'exito':
+      fabricados++;
+      fallosConsecutivos = 0;
+      break;
+
+    case 'fallo':
+      fallosConsecutivos++;
+      if (fallosConsecutivos >= MAX_FALLOS) {
+        err(`${MAX_FALLOS} fallos consecutivos. Macro detenida.`);
+        exit();
+      }
+      sleep(1000);
+      break;
+
+    case 'sin_material':
+      if (!modoMacreo) descargarResultados();
+      if (!reponerTroncos()) {
+        err(`Sin troncos. Total fabricados: ${fabricados}`);
+        exit();
+      }
+      break;
+
+    case 'sin_daga':
+      err(`Sin dagas. Total fabricados: ${fabricados}`);
+      exit();
+  }
+}
+
+cfg(`Macro finalizada. Total ${def.nombre}s fabricados: ${fabricados}`);
