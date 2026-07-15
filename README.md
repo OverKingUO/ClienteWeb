@@ -27,7 +27,5 @@ Este proyecto se distribuye bajo licencia MIT. Puedes usar, modificar y comparti
 
 ## 📊 Progreso del proyecto
 
-- ✅ 8 / 43 macros completadas  
-- ⏳ 35 pendientes  
-
-![Progreso](https://progress-bar.dev/19/?title=Macros)
+**Macros: 8/43 (19%)**
+█████░░░░░░░░░░░
