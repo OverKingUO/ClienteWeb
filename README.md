@@ -9,7 +9,8 @@ Incluye macros de combate, recolección, soporte y utilidades, con ejemplos list
 ├── ⚔️Entrenamiento
 ├── ⛏️Recoleccion
 ├── 🧪Elaboración
-└── 🛠️Utilidades```
+└── 🛠️Utilidades
+```
 
 ## 🎬 Tutoriales
 ├── [🔗Conectar Claude al cliente de ClassicUO](https://www.youtube.com/watch?v=AvgA268yPEw)
