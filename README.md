@@ -23,3 +23,11 @@ Colección organizada de macros para ClienteWeb, diseñadas para automatizar tar
 
 ## 📜 Licencia
 Este proyecto se distribuye bajo licencia MIT. Puedes usar, modificar y compartir libremente el contenido.
+
+
+## 📊 Progreso del proyecto
+
+- ✅ 8 / 43 macros completadas  
+- ⏳ 35 pendientes  
+
+![Progreso](https://progress-bar.dev/19/?title=Macros)
