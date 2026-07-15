@@ -13,11 +13,11 @@ Incluye macros de combate, recolección, soporte y utilidades, con ejemplos list
 ```
 
 ## 🎬 Tutoriales
-├── [🔗Conectar Claude al cliente de ClassicUO](https://www.youtube.com/watch?v=AvgA268yPEw)
-├── ✏️La fórmula para pedirme un script     
-├── 📘Conceptos básicos que el espectador debe entender    
-├── 🔥Cómo probar el script y corregir posibles errores
-└── 🔧Cómo adaptar y modificar un script ya existente       
+[🔗Conectar Claude al cliente de ClassicUO](https://www.youtube.com/watch?v=AvgA268yPEw)
+✏️La fórmula para pedirme un script     
+📘Conceptos básicos que el espectador debe entender    
+🔥Cómo probar el script y corregir posibles errores
+🔧Cómo adaptar y modificar un script ya existente       
 
 
 ## 👤 Autor
