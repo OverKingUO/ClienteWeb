@@ -14,8 +14,8 @@ Incluye macros de combate, recolección, soporte y utilidades, con ejemplos list
 
 ## 🎬 Tutoriales
 [🔗Conectar Claude al cliente de ClassicUO](https://www.youtube.com/watch?v=AvgA268yPEw)<br>
-✏️La fórmula para pedirme un script<br>     
-📘Conceptos básicos que el espectador debe entender<br>    
+✏️La fórmula para pedirme un script<br>
+📘Conceptos básicos que el espectador debe entender<br>
 🔥Cómo probar el script y corregir posibles errores<br>
 🔧Cómo adaptar y modificar un script ya existente<br>       
 
