@@ -19,8 +19,7 @@ Colección organizada de macros para ClienteWeb, diseñadas para automatizar tar
 🔧Cómo adaptar y modificar un script ya existente<br>       
 
 ## 👤 Autores
-**OVER**  
-**CIROC**
+**Over & Ciroc**  
 
 ## 📜 Licencia
 Este proyecto se distribuye bajo licencia MIT. Puedes usar, modificar y compartir libremente el contenido.
