@@ -1,0 +1,1279 @@
+// ============================================================
+// MACRO: Alquimia — Ultima Alianza
+// Versión: 3.0
+// Autor: Over
+// ============================================================
+
+// ============================================================
+// CONFIGURACIÓN DE USUARIO
+// ============================================================
+// Pon el número de la poción que quieres fabricar 
+// Pon true para guardar las pociones en kegs o false para guardarlas en frascos
+const POCION_A_FABRICAR = 6;
+const USAR_KEG = true;
+//    
+//    0 - MODO MACREO: fabrica Veneno Menor (hasta 100.0 Alchemy)
+//
+//   ── Atributos ───────────────────────────────────────────
+//    1 - Agilidad
+//    2 - Agilidad Mejorada
+//    3 - Fuerza
+//    4 - Fuerza Mejorada
+//    5 - Inteligencia
+//    6 - Inteligencia Mejorada
+//    7 - Bendecir
+//
+//   ── Resistencia ─────────────────────────────────────────
+//    8 - Resistencia
+//    9 - Resistencia Total
+//
+//   ── Mana ────────────────────────────────────────────────
+//   10 - Mana
+//   11 - Mana Total
+//
+//   ── Curación ────────────────────────────────────────────
+//   12 - Curación Menor
+//   13 - Curación
+//   14 - Curación Mejorada
+//   15 - Familiar Combativo
+//   16 - Familiar Habilidoso
+//
+//   ── Venenos ─────────────────────────────────────────────
+//   17 - Veneno Menor
+//   18 - Veneno
+//   19 - Veneno Mejorado
+//   20 - Veneno Mortal
+//   21 - Campo de Veneno
+//   22 - Ácido
+//
+//   ── Antídoto ────────────────────────────────────────────
+//   23 - Antídoto Menor
+//   24 - Antídoto
+//   25 - Antídoto Mejorado
+//   26 - Antídoto contra Ácido
+//   27 - Antídoto contra Sangrado
+//
+//   ── Explosión ───────────────────────────────────────────
+//   28 - Explosión Menor
+//   29 - Explosión
+//   30 - Explosión Mejorada
+//   31 - Campo de Fuego
+//
+//   ── Mixturas ────────────────────────────────────────────
+//   32 - Visión Nocturna
+//   33 - Armadura Reactiva
+//   34 - Disipar
+//   35 - Encoger
+//   36 - Cambio de Sexo
+//   37 - Sustento
+//   38 - Piel de Piedra
+//   39 - Invisibilidad
+//   40 - Curación Animal
+//   41 - Campo Paralizante
+//   42 - Poción Paralizante
+
+// ============================================================
+// BLOQUE 1 — CATÁLOGO DE POCIONES (uso interno)
+// ============================================================
+
+interface RecursoEntry {
+  graphic:  number;
+  hue:      number | null;
+  cantidad: number;
+  peso:     number;
+  nombre:   string;
+}
+
+interface DefPocion {
+  nombre:          string;
+  categoriaId:     number;
+  pocionId:        number;
+  paginaSiguiente?: true;    // si true, pulsar BTN_SIGUIENTE antes de pocionId
+  skill:           Skills;
+  skillMinima:     number;
+  skill2?:         Skills;
+  skillMinima2?:   number;
+  recursos:        RecursoEntry[];
+  resultGraphic:   number;
+  resultHue:       number;   // hue de la poción fabricada (identifica el tipo)
+  resultPeso:      number;
+}
+
+// Gráficos centralizados
+const G = {
+  FRASCO:           0x0F0E,
+  MUSGO_SANGRE:     0x0F7B,
+  MANDRAKE:         0x0F86,
+  AJO:              0x0F84,
+  SEDA_ARACNIDO:    0x0F8D,
+  PERLA_NEGRA:      0x0F7A,
+  OJO_TRITON:       0x0F87,
+  GINSENG:          0x0F85,
+  TALLO_AMBROSIA:   0x0000, // AJUSTAR
+  SETA_AVENTURERO:  0x0F83,
+  BELLADONA:        0x0F88,
+  ESENCIA_LAVA:     0x0000, // AJUSTAR
+  ESCAMA_SERPIENTE: 0x0F8E,
+  CENIZA_SULFUROSA: 0x0F8C,
+  AZUFRE:           0x0F7F,
+  SETA_VERDUGO:     0x0000, // AJUSTAR
+  ALAS_MURCIELAGO:  0x0F78,
+  SANGRE_DRAGON:    0x0F82,
+  PERLA:            0x0F7A,
+};
+
+// Peso del frasco vacío (recurso común a todas las pociones)
+const FRASCO_PESO = 1.0;
+
+function frasco(cantidad: number = 1): RecursoEntry {
+  return { graphic: G.FRASCO, hue: null, cantidad, peso: FRASCO_PESO, nombre: "frasco vacío" };
+}
+
+const POCIONES: Record<number, DefPocion> = {
+
+  // ── ATRIBUTOS (categoría 1) ──────────────────────────────
+
+  1: {
+    nombre: "Agilidad", categoriaId: 1, pocionId: 601,
+    skill: Skills.Alchemy, skillMinima: 10.1,
+    recursos: [
+      frasco(),
+      { graphic: G.MUSGO_SANGRE, hue: null, cantidad: 1, peso: 1.0, nombre: "musgo de sangre" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0063, resultPeso: 1.0,
+  },
+  2: {
+    nombre: "Agilidad Mejorada", categoriaId: 1, pocionId: 602,
+    skill: Skills.Alchemy, skillMinima: 35.1,
+    recursos: [
+      frasco(),
+      { graphic: G.MUSGO_SANGRE, hue: null, cantidad: 3, peso: 1.0, nombre: "musgo de sangre" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0063, resultPeso: 1.0,
+  },
+  3: {
+    nombre: "Fuerza", categoriaId: 1, pocionId: 603,
+    skill: Skills.Alchemy, skillMinima: 25.1,
+    recursos: [
+      frasco(),
+      { graphic: G.MANDRAKE, hue: null, cantidad: 2, peso: 1.0, nombre: "raíz de mandrágora" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x02B8, resultPeso: 1.0,
+  },
+  4: {
+    nombre: "Fuerza Mejorada", categoriaId: 1, pocionId: 604,
+    skill: Skills.Alchemy, skillMinima: 45.1,
+    recursos: [
+      frasco(),
+      { graphic: G.MANDRAKE, hue: null, cantidad: 5, peso: 1.0, nombre: "raíz de mandrágora" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x02B8, resultPeso: 1.0,
+  },
+  5: {
+    nombre: "Inteligencia", categoriaId: 1, pocionId: 605,
+    skill: Skills.Alchemy, skillMinima: 35.1,
+    recursos: [
+      frasco(),
+      { graphic: G.AJO, hue: null, cantidad: 1, peso: 1.0, nombre: "ajo" },
+      { graphic: G.SEDA_ARACNIDO, hue: null, cantidad: 1, peso: 1.0, nombre: "seda de arácnido" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x07AD, resultPeso: 1.0,
+  },
+  6: {
+    nombre: "Inteligencia Mejorada", categoriaId: 1, pocionId: 606,
+    skill: Skills.Alchemy, skillMinima: 55.1,
+    recursos: [
+      frasco(),
+      { graphic: G.AJO, hue: null, cantidad: 2, peso: 1.0, nombre: "ajo" },
+      { graphic: G.SEDA_ARACNIDO, hue: null, cantidad: 2, peso: 1.0, nombre: "seda de arácnido" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x07AD, resultPeso: 1.0,
+  },
+  7: {
+    nombre: "Bendecir", categoriaId: 1, pocionId: 607,
+    skill: Skills.Alchemy, skillMinima: 60.0,
+    recursos: [
+      frasco(),
+      { graphic: G.AJO, hue: null, cantidad: 1, peso: 1.0, nombre: "ajo" },
+      { graphic: G.MANDRAKE, hue: null, cantidad: 1, peso: 1.0, nombre: "raíz de mandrágora" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x07A1, resultPeso: 1.0,
+  },
+
+  // ── RESISTENCIA (categoría 2) ────────────────────────────
+
+  8: {
+    nombre: "Resistencia", categoriaId: 2, pocionId: 601,
+    skill: Skills.Alchemy, skillMinima: 2.1,
+    recursos: [
+      frasco(),
+      { graphic: G.PERLA, hue: null, cantidad: 1, peso: 1.0, nombre: "perla negra" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0025, resultPeso: 1.0,
+  },
+  9: {
+    nombre: "Resistencia Total", categoriaId: 2, pocionId: 602,
+    skill: Skills.Alchemy, skillMinima: 30.1,
+    recursos: [
+      frasco(),
+      { graphic: G.PERLA, hue: null, cantidad: 6, peso: 1.0, nombre: "perla negra" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0025, resultPeso: 1.0,
+  },
+
+  // ── MANA (categoría 3) ───────────────────────────────────
+
+  10: {
+    nombre: "Mana", categoriaId: 3, pocionId: 601,
+    skill: Skills.Alchemy, skillMinima: 75.1,
+    recursos: [
+      frasco(),
+      { graphic: G.OJO_TRITON, hue: null, cantidad: 3, peso: 1.0, nombre: "ojo de tritón" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0000, resultPeso: 1.0, // AJUSTAR hue mana
+  },
+  11: {
+    nombre: "Mana Total", categoriaId: 3, pocionId: 602,
+    skill: Skills.Alchemy, skillMinima: 99.9,
+    recursos: [
+      frasco(),
+      { graphic: G.OJO_TRITON, hue: null, cantidad: 8, peso: 1.0, nombre: "ojo de tritón" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0000, resultPeso: 1.0, // AJUSTAR hue mana total
+  },
+
+  // ── CURACIÓN (categoría 4) ───────────────────────────────
+
+  12: {
+    nombre: "Curación Menor", categoriaId: 4, pocionId: 601,
+    skill: Skills.Alchemy, skillMinima: 2.1,
+    recursos: [
+      frasco(),
+      { graphic: G.GINSENG, hue: null, cantidad: 1, peso: 1.0, nombre: "ginseng" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x00FE, resultPeso: 1.0,
+  },
+  13: {
+    nombre: "Curación", categoriaId: 4, pocionId: 602,
+    skill: Skills.Alchemy, skillMinima: 15.1,
+    recursos: [
+      frasco(),
+      { graphic: G.GINSENG, hue: null, cantidad: 3, peso: 1.0, nombre: "ginseng" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x00FE, resultPeso: 1.0,
+  },
+  14: {
+    nombre: "Curación Mejorada", categoriaId: 4, pocionId: 603,
+    skill: Skills.Alchemy, skillMinima: 55.1,
+    recursos: [
+      frasco(),
+      { graphic: G.GINSENG, hue: null, cantidad: 7, peso: 1.0, nombre: "ginseng" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x00FE, resultPeso: 1.0,
+  },
+  15: {
+    nombre: "Familiar Combativo", categoriaId: 4, pocionId: 604,
+    skill: Skills.Alchemy, skillMinima: 83.7,
+    skill2: Skills.Veterinary, skillMinima2: 35.0,
+    recursos: [
+      frasco(),
+      { graphic: G.TALLO_AMBROSIA, hue: null, cantidad: 1,  peso: 1.0, nombre: "tallo de ambrosia" },
+      { graphic: G.GINSENG,        hue: null, cantidad: 45, peso: 1.0, nombre: "ginseng" },
+      { graphic: G.SETA_AVENTURERO,hue: null, cantidad: 4,  peso: 1.0, nombre: "seta del aventurero" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0492, resultPeso: 1.0,
+  },
+  16: {
+    nombre: "Familiar Habilidoso", categoriaId: 4, pocionId: 605,
+    skill: Skills.Alchemy, skillMinima: 89.7,
+    skill2: Skills.Veterinary, skillMinima2: 75.0,
+    recursos: [
+      frasco(),
+      { graphic: G.TALLO_AMBROSIA, hue: null, cantidad: 1,  peso: 1.0, nombre: "tallo de ambrosia" },
+      { graphic: G.MANDRAKE,       hue: null, cantidad: 45, peso: 1.0, nombre: "raíz de mandrágora" },
+      { graphic: G.SETA_AVENTURERO,hue: null, cantidad: 4,  peso: 1.0, nombre: "seta del aventurero" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x048A, resultPeso: 1.0,
+  },
+
+  // ── VENENOS (categoría 5) ────────────────────────────────
+
+  17: {
+    nombre: "Veneno Menor", categoriaId: 5, pocionId: 601,
+    skill: Skills.Alchemy, skillMinima: 2.1,
+    recursos: [
+      frasco(),
+      { graphic: G.BELLADONA, hue: null, cantidad: 1, peso: 1.0, nombre: "belladona" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0170, resultPeso: 1.0,
+  },
+  18: {
+    nombre: "Veneno", categoriaId: 5, pocionId: 602,
+    skill: Skills.Alchemy, skillMinima: 20.1,
+    recursos: [
+      frasco(),
+      { graphic: G.BELLADONA, hue: null, cantidad: 2, peso: 1.0, nombre: "belladona" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0170, resultPeso: 1.0,
+  },
+  19: {
+    nombre: "Veneno Mejorado", categoriaId: 5, pocionId: 603,
+    skill: Skills.Alchemy, skillMinima: 55.1,
+    recursos: [
+      frasco(),
+      { graphic: G.BELLADONA, hue: null, cantidad: 4, peso: 1.0, nombre: "belladona" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0170, resultPeso: 1.0,
+  },
+  20: {
+    nombre: "Veneno Mortal", categoriaId: 5, pocionId: 604,
+    skill: Skills.Alchemy, skillMinima: 99.1,
+    recursos: [
+      frasco(),
+      { graphic: G.BELLADONA, hue: null, cantidad: 8, peso: 1.0, nombre: "belladona" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0170, resultPeso: 1.0,
+  },
+  21: {
+    nombre: "Campo de Veneno", categoriaId: 5, pocionId: 605,
+    skill: Skills.Alchemy, skillMinima: 117.1,
+    recursos: [
+      frasco(),
+      { graphic: G.ESENCIA_LAVA,    hue: null, cantidad: 5,  peso: 1.0, nombre: "esencia de lava" },
+      { graphic: G.BELLADONA,       hue: null, cantidad: 33, peso: 1.0, nombre: "belladona" },
+      { graphic: G.CENIZA_SULFUROSA,hue: null, cantidad: 15, peso: 1.0, nombre: "ceniza sulfurosa" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x010B, resultPeso: 1.0,
+  },
+  22: {
+    nombre: "Ácido", categoriaId: 5, pocionId: 606,
+    skill: Skills.Alchemy, skillMinima: 88.1,
+    recursos: [
+      frasco(),
+      { graphic: G.BELLADONA,       hue: null, cantidad: 28, peso: 1.0, nombre: "belladona" },
+      { graphic: G.ESCAMA_SERPIENTE,hue: null, cantidad: 12, peso: 1.0, nombre: "escama de serpiente" },
+      { graphic: G.ESENCIA_LAVA,    hue: null, cantidad: 10, peso: 1.0, nombre: "esencia de lava" },
+      { graphic: G.MUSGO_SANGRE,    hue: null, cantidad: 22, peso: 1.0, nombre: "musgo de sangre" },
+    ],
+    resultGraphic: 0x0F0A, resultHue: 0x0000, resultPeso: 1.0, // AJUSTAR hue ácido
+  },
+
+  // ── ANTÍDOTO (categoría 6) ───────────────────────────────
+
+  23: {
+    nombre: "Antídoto Menor", categoriaId: 6, pocionId: 601,
+    skill: Skills.Alchemy, skillMinima: 2.1,
+    recursos: [
+      frasco(),
+      { graphic: G.AJO, hue: null, cantidad: 1, peso: 1.0, nombre: "ajo" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0028, resultPeso: 1.0,
+  },
+  24: {
+    nombre: "Antídoto", categoriaId: 6, pocionId: 602,
+    skill: Skills.Alchemy, skillMinima: 25.1,
+    recursos: [
+      frasco(),
+      { graphic: G.AJO, hue: null, cantidad: 3, peso: 1.0, nombre: "ajo" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0028, resultPeso: 1.0,
+  },
+  25: {
+    nombre: "Antídoto Mejorado", categoriaId: 6, pocionId: 603,
+    skill: Skills.Alchemy, skillMinima: 60.1,
+    recursos: [
+      frasco(),
+      { graphic: G.AJO, hue: null, cantidad: 6, peso: 1.0, nombre: "ajo" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0028, resultPeso: 1.0,
+  },
+  26: {
+    nombre: "Antídoto contra Ácido", categoriaId: 6, pocionId: 604,
+    skill: Skills.Alchemy, skillMinima: 65.1,
+    recursos: [
+      frasco(),
+      { graphic: G.SEDA_ARACNIDO,    hue: null, cantidad: 1, peso: 1.0, nombre: "seda de arácnido" },
+      { graphic: G.ESCAMA_SERPIENTE, hue: null, cantidad: 1, peso: 1.0, nombre: "escama de serpiente" },
+      { graphic: G.GINSENG,          hue: null, cantidad: 1, peso: 1.0, nombre: "ginseng" },
+    ],
+    resultGraphic: 0x0F06, resultHue: 0x0000, resultPeso: 1.0, // AJUSTAR hue
+  },
+  27: {
+    nombre: "Antídoto contra Sangrado", categoriaId: 6, pocionId: 605,
+    skill: Skills.Alchemy, skillMinima: 77.3,
+    recursos: [
+      frasco(),
+      { graphic: G.SEDA_ARACNIDO,    hue: null, cantidad: 1, peso: 1.0, nombre: "seda de arácnido" },
+      { graphic: G.ESCAMA_SERPIENTE, hue: null, cantidad: 1, peso: 1.0, nombre: "escama de serpiente" },
+      { graphic: G.GINSENG,          hue: null, cantidad: 1, peso: 1.0, nombre: "ginseng" },
+    ],
+    resultGraphic: 0x0F06, resultHue: 0x0000, resultPeso: 1.0, // AJUSTAR hue
+  },
+
+  // ── EXPLOSIÓN (categoría 7) ──────────────────────────────
+
+  28: {
+    nombre: "Explosión Menor", categoriaId: 7, pocionId: 601,
+    skill: Skills.Alchemy, skillMinima: 5.1,
+    recursos: [
+      frasco(),
+      { graphic: G.CENIZA_SULFUROSA, hue: null, cantidad: 3, peso: 1.0, nombre: "ceniza sulfurosa" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0012, resultPeso: 1.0,
+  },
+  29: {
+    nombre: "Explosión", categoriaId: 7, pocionId: 602,
+    skill: Skills.Alchemy, skillMinima: 40.1,
+    recursos: [
+      frasco(),
+      { graphic: G.CENIZA_SULFUROSA, hue: null, cantidad: 5, peso: 1.0, nombre: "ceniza sulfurosa" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0012, resultPeso: 1.0,
+  },
+  30: {
+    nombre: "Explosión Mejorada", categoriaId: 7, pocionId: 603,
+    skill: Skills.Alchemy, skillMinima: 85.1,
+    recursos: [
+      frasco(),
+      { graphic: G.CENIZA_SULFUROSA, hue: null, cantidad: 20, peso: 1.0, nombre: "ceniza sulfurosa" },
+      { graphic: G.AZUFRE,           hue: null, cantidad: 1,  peso: 1.0, nombre: "azufre" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0012, resultPeso: 1.0,
+  },
+  31: {
+    nombre: "Campo de Fuego", categoriaId: 7, pocionId: 604,
+    skill: Skills.Alchemy, skillMinima: 111.1,
+    recursos: [
+      frasco(),
+      { graphic: G.CENIZA_SULFUROSA, hue: null, cantidad: 15, peso: 1.0, nombre: "ceniza sulfurosa" },
+      { graphic: G.SEDA_ARACNIDO,   hue: null, cantidad: 20, peso: 1.0, nombre: "seda de arácnido" },
+      { graphic: G.ESENCIA_LAVA,    hue: null, cantidad: 4,  peso: 1.0, nombre: "esencia de lava" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0022, resultPeso: 1.0,
+  },
+
+  // ── MIXTURAS (categoría 8) ───────────────────────────────
+
+  32: {
+    nombre: "Visión Nocturna", categoriaId: 8, pocionId: 601,
+    skill: Skills.Alchemy, skillMinima: 2.1,
+    recursos: [
+      frasco(),
+      { graphic: G.SEDA_ARACNIDO, hue: null, cantidad: 1, peso: 1.0, nombre: "seda de arácnido" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0386, resultPeso: 1.0,
+  },
+  33: {
+    nombre: "Armadura Reactiva", categoriaId: 8, pocionId: 602,
+    skill: Skills.Alchemy, skillMinima: 50.0,
+    recursos: [
+      frasco(),
+      { graphic: G.SEDA_ARACNIDO,    hue: null, cantidad: 1, peso: 1.0, nombre: "seda de arácnido" },
+      { graphic: G.AJO,              hue: null, cantidad: 1, peso: 1.0, nombre: "ajo" },
+      { graphic: G.CENIZA_SULFUROSA, hue: null, cantidad: 1, peso: 1.0, nombre: "ceniza sulfurosa" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x01D3, resultPeso: 1.0,
+  },
+  34: {
+    nombre: "Disipar", categoriaId: 8, pocionId: 603,
+    skill: Skills.Alchemy, skillMinima: 70.0,
+    recursos: [
+      frasco(),
+      { graphic: G.AJO,              hue: null, cantidad: 1, peso: 1.0, nombre: "ajo" },
+      { graphic: G.MANDRAKE,         hue: null, cantidad: 1, peso: 1.0, nombre: "raíz de mandrágora" },
+      { graphic: G.CENIZA_SULFUROSA, hue: null, cantidad: 1, peso: 1.0, nombre: "ceniza sulfurosa" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0482, resultPeso: 1.0,
+  },
+  35: {
+    nombre: "Encoger", categoriaId: 8, pocionId: 604,
+    skill: Skills.Alchemy, skillMinima: 65.1,
+    recursos: [
+      frasco(),
+      { graphic: G.ALAS_MURCIELAGO, hue: null, cantidad: 2, peso: 1.0, nombre: "alas de murciélago" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x043A, resultPeso: 1.0,
+  },
+  36: {
+    nombre: "Cambio de Sexo", categoriaId: 8, pocionId: 605,
+    skill: Skills.Alchemy, skillMinima: 80.1,
+    recursos: [
+      frasco(),
+      { graphic: G.MUSGO_SANGRE, hue: null, cantidad: 1, peso: 1.0, nombre: "musgo de sangre" },
+      { graphic: G.GINSENG,      hue: null, cantidad: 1, peso: 1.0, nombre: "ginseng" },
+      { graphic: G.MANDRAKE,     hue: null, cantidad: 1, peso: 1.0, nombre: "raíz de mandrágora" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0775, resultPeso: 1.0,
+  },
+  37: {
+    nombre: "Sustento", categoriaId: 8, pocionId: 606,
+    skill: Skills.Alchemy, skillMinima: 55.1,
+    recursos: [
+      frasco(),
+      { graphic: G.PERLA,            hue: null, cantidad: 1, peso: 1.0, nombre: "perla negra" },
+      { graphic: G.CENIZA_SULFUROSA, hue: null, cantidad: 1, peso: 1.0, nombre: "ceniza sulfurosa" },
+      { graphic: G.MUSGO_SANGRE,     hue: null, cantidad: 1, peso: 1.0, nombre: "musgo de sangre" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x00F8, resultPeso: 1.0,
+  },
+  38: {
+    nombre: "Piel de Piedra", categoriaId: 8, pocionId: 607,
+    skill: Skills.Alchemy, skillMinima: 95.1,
+    recursos: [
+      frasco(),
+      { graphic: G.AZUFRE, hue: null, cantidad: 4, peso: 1.0, nombre: "azufre" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x074E, resultPeso: 1.0,
+  },
+  39: {
+    nombre: "Invisibilidad", categoriaId: 8, pocionId: 608,
+    skill: Skills.Alchemy, skillMinima: 70.1,
+    recursos: [
+      frasco(),
+      { graphic: G.SANGRE_DRAGON, hue: null, cantidad: 3, peso: 1.0, nombre: "sangre de dragón" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x02BF, resultPeso: 1.0,
+  },
+  40: {
+    nombre: "Curación Animal", categoriaId: 8, pocionId: 609,
+    skill: Skills.Alchemy, skillMinima: 78.5,
+    skill2: Skills.Veterinary, skillMinima2: 65.0,
+    recursos: [
+      frasco(),
+      { graphic: G.TALLO_AMBROSIA, hue: null, cantidad: 5, peso: 1.0, nombre: "tallo de ambrosia" },
+      { graphic: G.GINSENG,        hue: null, cantidad: 5, peso: 1.0, nombre: "ginseng" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0B9F, resultPeso: 1.0,
+  },
+  41: {
+    nombre: "Campo Paralizante", categoriaId: 8, pocionId: 610,
+    skill: Skills.Alchemy, skillMinima: 118.1,
+    recursos: [
+      frasco(),
+      { graphic: G.PERLA_NEGRA,    hue: null, cantidad: 10, peso: 1.0, nombre: "perla negra" },
+      { graphic: G.SEDA_ARACNIDO,  hue: null, cantidad: 20, peso: 1.0, nombre: "seda de arácnido" },
+      { graphic: G.ESENCIA_LAVA,   hue: null, cantidad: 3,  peso: 1.0, nombre: "esencia de lava" },
+    ],
+    resultGraphic: G.FRASCO, resultHue: 0x0059, resultPeso: 1.0,
+  },
+  42: {
+    nombre: "Poción Paralizante", categoriaId: 8, pocionId: 611, paginaSiguiente: true,
+    skill: Skills.Alchemy, skillMinima: 75.1,
+    recursos: [
+      frasco(),
+      { graphic: G.PERLA_NEGRA,    hue: null, cantidad: 24, peso: 1.0, nombre: "perla negra" },
+      { graphic: G.MANDRAKE,       hue: null, cantidad: 17, peso: 1.0, nombre: "raíz de mandrágora" },
+      { graphic: G.SETA_VERDUGO,   hue: null, cantidad: 22, peso: 1.0, nombre: "seta del verdugo" },
+      { graphic: G.ESENCIA_LAVA,   hue: null, cantidad: 12, peso: 1.0, nombre: "esencia de lava" },
+    ],
+    resultGraphic: 0x0F06, resultHue: 0x0000, resultPeso: 1.0, // AJUSTAR hue
+  },
+};
+
+
+// ============================================================
+// BLOQUE 2 — AJUSTES INTERNOS
+// ============================================================
+
+const CFG = {
+  // Modo macreo: se activa si POCION_A_FABRICAR = 0 → usa Veneno Menor y para al 100.0
+  MODO_MACREO: POCION_A_FABRICAR === 0,
+  POCION: POCION_A_FABRICAR === 0 ? 17 : POCION_A_FABRICAR,
+  GUMP_ALQUIMIA: 0x460,
+  BTN_FABRICAR_ULTIMO: 508,
+  BTN_SIGUIENTE: 404,
+  MORTERO_GRAPHIC: 0x0E9B,   // mortero (herramienta de alquimia)
+  MORTERO_PESO: 1.0,
+  MORTEROS_EN_MOCHILA: 2,
+  MARGEN_PESO_LIBRE: 5,
+  SLEEP_GUMP: 2000,
+  SLEEP_NAV: 700,
+  SLEEP_MOVE: 600,
+  TIMEOUT_CRAFT: 8000,
+  LIMITE_KEG: 1000,
+};
+
+const JOURNAL_FABRICACION = {
+  EXITO:        ["colocas", "creas con exito", "Has fabricado", "Pones el"],
+  ERROR_CRAFT:  ["fallas", "no has podido"],
+  SIN_MATERIAL: ["no tienes suficiente", "no tienes los materiales"],
+};
+const TODOS_MSGS_CRAFT = [
+  ...JOURNAL_FABRICACION.EXITO,
+  ...JOURNAL_FABRICACION.ERROR_CRAFT,
+  ...JOURNAL_FABRICACION.SIN_MATERIAL,
+];
+
+// World Save
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN    = "Comienza la grabacion de las bases de datos";
+
+
+// ============================================================
+// BLOQUE 3 — UTILIDADES
+// ============================================================
+
+function cfg(msg: string): void { client.sysMsg(`[ALQUIMIA] ${msg}`, 0x44); }
+function err(msg: string): void { client.sysMsg(`[ALQUIMIA] ⚠ ${msg}`, 0x26); }
+
+function contarUnidades(serial: number, graphic: number, hue: number | null = null): number {
+  const items = client.findAllItemsOfType(graphic, hue, { serial }, null, 0);
+  let total = 0;
+  for (const it of items) total += it.amount;
+  return total;
+}
+
+function moverUnidades(origen: number, destino: number, graphic: number, cantidad: number, hue: number | null = null): number {
+  let movidas = 0;
+  while (movidas < cantidad) {
+    const item = client.findType(graphic, hue, { serial: origen }, null, 0);
+    if (!item) break;
+    const aMover = Math.min(item.amount, cantidad - movidas);
+    player.moveItem(item, { serial: destino }, 0, 0, 0, aMover);
+    sleep(CFG.SLEEP_MOVE);
+    movidas += aMover;
+  }
+  return movidas;
+}
+
+function pesoLibre(): number {
+  return Math.max(0, player.weightMax - CFG.MARGEN_PESO_LIBRE - player.weight);
+}
+
+function checkWorldSave(): void {
+  // Usar containsText solo si el mensaje está presente en el journal
+  // en este momento. Para evitar falsos positivos por mensajes antiguos
+  // acumulados, comprobamos solo si alguno de los textos de save está
+  // en el journal Y limpiamos inmediatamente tras detectarlo.
+  //
+  // Si el bucle principal ya hizo journal.clear() antes de fabricar,
+  // aquí solo pueden aparecer mensajes llegados DESPUÉS de ese clear.
+
+  const hayAviso  = journal.containsText(WS_AVISO);
+  const hayInicio = journal.containsText(WS_INICIO);
+
+  if (!hayAviso && !hayInicio) return; // nada que hacer
+
+  journal.clear(); // consumir el mensaje para no volver a detectarlo
+
+  if (hayAviso) {
+    client.sysMsg("[ALQUIMIA] Save en 1 min. Pausando...", 0x26);
+    // Esperar a que empiece el save (máx 90s) y luego a que termine (máx 3min)
+    journal.waitForText(WS_INICIO, undefined, 90000);
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    journal.clear();
+  } else {
+    // Ya estaba en curso cuando se llamó
+    client.sysMsg("[ALQUIMIA] Save en curso. Esperando fin...", 0x26);
+    journal.waitForText(WS_FIN, undefined, 180000);
+    journal.clear();
+  }
+
+  client.sysMsg("[ALQUIMIA] Save terminado. Continuando.", 0x44);
+  sleep(3000);
+}
+
+
+// ============================================================
+// BLOQUE 4 — VALIDACIÓN INICIAL
+// ============================================================
+
+const def = POCIONES[CFG.POCION];
+if (!def) {
+  err(`No existe la poción número ${CFG.POCION} en el catálogo.`);
+  exit();
+}
+
+const skillInfo = player.getSkill(def.skill);
+const skillValor = skillInfo ? skillInfo.value / 10 : 0;
+if (skillValor < def.skillMinima) {
+  err(`Alchemy insuficiente. Tienes ${skillValor.toFixed(1)}, necesitas ${def.skillMinima}.`);
+  exit();
+}
+
+if (def.skill2 !== undefined && def.skillMinima2 !== undefined) {
+  const s2 = player.getSkill(def.skill2);
+  const v2 = s2 ? s2.value / 10 : 0;
+  if (v2 < def.skillMinima2) {
+    err(`Skill secundaria insuficiente. Tienes ${v2.toFixed(1)}, necesitas ${def.skillMinima2}.`);
+    exit();
+  }
+}
+
+cfg(`Poción: ${def.nombre}`);
+
+
+// ============================================================
+// BLOQUE 5 — SELECCIÓN DE BOLSAS
+// ============================================================
+//
+// Problema conocido del cliente: abrir un contenedor padre cierra
+// automáticamente las bolsas hijas que ya estaban abiertas.
+// Solución: registramos todos los seriales ya abiertos y, si el
+// usuario selecciona uno de ellos, no lo volvemos a abrir.
+
+// ── Gestión de contenedores abiertos ────────────────────────
+//
+// El cliente cierra los contenedores hijos cuando se abre el padre.
+// Para evitarlo, nunca llamamos a player.use() sobre un contenedor
+// que el cliente ya tenga en memoria (abierto).
+//
+// ¿Cómo detectar si un contenedor ya está abierto?
+// Si client.findObject(serial) devuelve el objeto Y ese objeto tiene
+// .contents con al menos un elemento, el cliente ya tiene su contenido
+// en memoria → está abierto. Si .contents está vacío podría ser un
+// contenedor vacío abierto o uno cerrado; en ese caso usamos
+// findAllItemsOfType como segunda comprobación: si el servidor nos
+// devuelve items es que el cliente ya lo tiene cargado.
+// Si ambas pruebas fallan, el contenedor está cerrado y hay que abrirlo.
+//
+// Importante: registramos el serial en bolsasAbiertas en cuanto el
+// jugador lo selecciona con target.query(), independientemente de si
+// la macro lo abrió o no, así los contenedores que el jugador ya tenía
+// abiertos antes de lanzar la macro nunca se reabren.
+
+const bolsasAbiertas: Set<number> = new Set();
+
+// Considera abierto SOLO lo que la macro haya abierto explícitamente en esta sesión.
+// No se fía de findObject — el cliente puede tener el objeto en memoria sin tener
+// su contenido cargado, lo que causa que la primera caja nunca se abra.
+function estaAbierto(serial: number): boolean {
+  return bolsasAbiertas.has(serial);
+}
+
+function abrirSiNecesario(serial: number): void {
+  if (estaAbierto(serial)) return; // ya en memoria — no reabrir, evita cerrar hijos
+  player.use(serial);
+  sleep(1200);
+  bolsasAbiertas.add(serial);
+}
+
+function pedirBolsaConContenido(paso: string, graphic: number, hue: number | null, nombreItem: string): number {
+  while (true) {
+    cfg(`${paso} — Haz clic en la bolsa con ${nombreItem}...`);
+    const t = target.query(false);
+    if (!t || !t.serial) { err("Selección cancelada."); exit(); }
+
+    // Primera vez siempre abrimos para cargar el contenido.
+    // Si ya estaba abierto (registrado) no lo reabrimos.
+    abrirSiNecesario(t.serial);
+
+    if (contarUnidades(t.serial, graphic, hue) > 0) return t.serial;
+
+    err(`Ahí no hay ${nombreItem}. Selecciona la bolsa correcta...`);
+  }
+}
+
+function pedirBolsaAbierta(paso: string): number {
+  cfg(`${paso} — Haz clic en el contenedor...`);
+  const t = target.query(false);
+  if (!t || !t.serial) { err("Selección cancelada."); exit(); }
+  abrirSiNecesario(t.serial);
+  return t.serial;
+}
+
+// ── Paso 1/4: bolsa de morteros ──
+const serialBolsaMorteros = pedirBolsaConContenido(
+  "1/4", CFG.MORTERO_GRAPHIC, null, "morteros"
+);
+
+// ── Paso 2/4: bolsa de frascos vacíos ──
+const serialBolsaFrascos = pedirBolsaConContenido(
+  "2/4", G.FRASCO, null, "frascos vacíos"
+);
+
+// ── Paso 3/4: bolsa de reactivos ──
+// Validamos con el primer reactivo que NO sea frasco
+// (el frasco es siempre el primero en def.recursos, así que tomamos el segundo)
+const recursoValidacion = def.recursos.find(r => r.graphic !== G.FRASCO) ?? def.recursos[0];
+const serialBolsaReactivos = pedirBolsaConContenido(
+  "3/4", recursoValidacion.graphic, recursoValidacion.hue, "reactivos"
+);
+
+// ── Paso 4/4: destino (keg o bolsa de pociones) ──
+let serialDestino: number;
+let serialKegLlenos: number = 0;
+
+const KEG_GRAPHICS = [0x1940, 0x1AD6, 0x1AD7];
+
+function contarUnidadesKeg(bolsa: number): number {
+  // Busca kegs por cualquiera de sus 3 gráficos posibles
+  let total = 0;
+  for (const g of KEG_GRAPHICS) {
+    total += contarUnidades(bolsa, g, null);
+  }
+  return total;
+}
+
+function findKegEnBolsa(bolsa: number): Item | null {
+  for (const g of KEG_GRAPHICS) {
+    const k = client.findType(g, null, { serial: bolsa }, null, 0);
+    if (k) return k as Item;
+  }
+  return null;
+}
+
+function findKegEnMochila(): Item | null {
+  for (const g of KEG_GRAPHICS) {
+    const k = client.findType(g, null, player.backpack, null, 0);
+    if (k) return k as Item;
+  }
+  return null;
+}
+
+if (USAR_KEG) {
+  serialDestino = ((): number => {
+    while (true) {
+      cfg("4/5 — Haz clic en la BOLSA CON KEGS vacíos...");
+      const t = target.query(false);
+      if (!t || !t.serial) { err("Selección cancelada."); exit(); }
+      abrirSiNecesario(t.serial);
+      if (contarUnidadesKeg(t.serial) > 0) return t.serial;
+      err("Esa bolsa no tiene kegs. Selecciona la bolsa correcta...");
+    }
+  })();
+
+  // Bolsa donde dejar los kegs llenos
+  cfg("5/5 — Haz clic en la BOLSA DESTINO para los kegs llenos...");
+  const tLlenos = target.query(false);
+  if (!tLlenos || !tLlenos.serial) { err("Selección cancelada."); exit(); }
+  abrirSiNecesario(tLlenos.serial);
+  serialKegLlenos = tLlenos.serial;
+  cfg("Bolsa de kegs llenos registrada.");
+} else {
+  serialDestino = pedirBolsaAbierta("4/4");
+}
+
+
+
+
+
+// ============================================================
+// BLOQUE 5B — VERIFICACIÓN TRAS EL SETEO
+// ============================================================
+//
+// Al terminar el seteo puede que algún contenedor se haya cerrado
+// (por ejemplo si el usuario seleccionó un hijo antes que el padre).
+// Comprobamos si la macro puede ver los items que necesita en cada
+// contenedor seteado. Si no los ve, reabre SOLO ese contenedor.
+// No reabrimos lo que ya está visible para no cerrar otros.
+
+function verificarYReobrirSiNecesario(serial: number, graphic: number, hue: number | null, nombreItem: string): void {
+  if (contarUnidades(serial, graphic, hue) > 0) return; // lo ve, no hacer nada
+  cfg(`No veo ${nombreItem} en su bolsa. Reabriendo contenedor...`);
+  player.use(serial);
+  sleep(1200);
+}
+
+// Morteros
+verificarYReobrirSiNecesario(serialBolsaMorteros, CFG.MORTERO_GRAPHIC, null, "morteros");
+
+// Frascos
+verificarYReobrirSiNecesario(serialBolsaFrascos, G.FRASCO, null, "frascos vacíos");
+
+// Reactivos (validamos con el mismo recurso que se usó para setear)
+verificarYReobrirSiNecesario(serialBolsaReactivos, recursoValidacion.graphic, recursoValidacion.hue, "reactivos");
+
+// Kegs (solo si USAR_KEG)
+if (USAR_KEG) {
+  // Para kegs usamos contarUnidadesKeg que busca por los 3 gráficos posibles
+  let vegKegs = false;
+  for (const g of KEG_GRAPHICS) {
+    if (contarUnidades(serialDestino, g, null) > 0) { vegKegs = true; break; }
+  }
+  if (!vegKegs) {
+    cfg("No veo kegs en su bolsa. Reabriendo contenedor...");
+    player.use(serialDestino);
+    sleep(1200);
+  }
+}
+
+
+// ============================================================
+// BLOQUE 6 — CÁLCULO Y CARGA INICIAL
+// ============================================================
+
+// Peso total de reactivos por craft (sin frasco, se cuenta aparte)
+const pesoReactivosPorCraft = def.recursos.reduce((sum, r) => sum + r.cantidad * r.peso, 0);
+// El frasco es el primer recurso siempre
+const frascoEntry = def.recursos[0];
+
+// Vaciar pociones ya fabricadas en mochila
+const pocionsEnMochila = contarUnidades(player.backpack!.serial, def.resultGraphic, def.resultHue);
+if (pocionsEnMochila > 0) {
+  moverUnidades(player.backpack!.serial, serialDestino, def.resultGraphic, pocionsEnMochila, def.resultHue);
+}
+
+// Asegurar morteros
+const morterosMochila = contarUnidades(player.backpack!.serial, CFG.MORTERO_GRAPHIC);
+if (morterosMochila < CFG.MORTEROS_EN_MOCHILA) {
+  const faltan = CFG.MORTEROS_EN_MOCHILA - morterosMochila;
+  const caben = Math.floor(pesoLibre() / CFG.MORTERO_PESO);
+  const aMover = Math.min(faltan, contarUnidades(serialBolsaMorteros, CFG.MORTERO_GRAPHIC), caben);
+  if (aMover > 0) moverUnidades(serialBolsaMorteros, player.backpack!.serial, CFG.MORTERO_GRAPHIC, aMover);
+}
+if (contarUnidades(player.backpack!.serial, CFG.MORTERO_GRAPHIC) === 0) {
+  err("Sin morteros disponibles. Macro detenida."); exit();
+}
+
+// Calcular cuántos crafts caben por peso
+// En cada craft: peso resultado (frasco lleno) reemplaza al frasco vacío — peso neto = 0
+// Pero durante el craft conviven reactivos + resultado en mochila momentáneamente
+// Usamos: caben = floor((pesoLibre - resultPeso) / pesoReactivosPorCraft)
+const pesoLibreActual = pesoLibre();
+const craftsCaben = Math.floor((pesoLibreActual - def.resultPeso) / pesoReactivosPorCraft);
+
+if (craftsCaben <= 0) {
+  err(`Peso libre insuficiente para cargar reactivos. Tienes ${pesoLibreActual.toFixed(1)} libres.`);
+  exit();
+}
+
+// Cargar reactivos iniciales — frascos de su bolsa específica, resto de reactivos de la bolsa de reactivos
+for (const recurso of def.recursos) {
+  const esFrasco = recurso.graphic === G.FRASCO;
+  const bolsaOrigen = esFrasco ? serialBolsaFrascos : serialBolsaReactivos;
+
+  const enMochila = contarUnidades(player.backpack!.serial, recurso.graphic, recurso.hue);
+  const objetivo = recurso.cantidad * craftsCaben;
+  const aCargar = Math.max(0, objetivo - enMochila);
+  if (aCargar > 0) {
+    const enBolsa = contarUnidades(bolsaOrigen, recurso.graphic, recurso.hue);
+    moverUnidades(bolsaOrigen, player.backpack!.serial, recurso.graphic, Math.min(aCargar, enBolsa), recurso.hue);
+  }
+}
+
+// Nivel objetivo: cuántos frascos (o primer recurso) tenemos ahora en mochila
+const nivelObjetivo = contarUnidades(player.backpack!.serial, frascoEntry.graphic, frascoEntry.hue);
+if (nivelObjetivo < frascoEntry.cantidad) {
+  err("Sin frascos vacíos suficientes. Macro detenida."); exit();
+}
+
+
+// ============================================================
+// BLOQUE 7 — NAVEGAR EL MENÚ UNA VEZ
+// ============================================================
+
+function abrirMenuAlquimia(): any {
+  const mortero = client.findType(CFG.MORTERO_GRAPHIC, null, player.backpack, null, 0);
+  if (!mortero) { err("Sin mortero en la mochila."); return null; }
+  player.use(mortero);
+  return Gump.findOrWait(CFG.GUMP_ALQUIMIA, CFG.SLEEP_GUMP);
+}
+
+// ============================================================
+// BLOQUE 8 — REPOSICIÓN
+// ============================================================
+
+function reponerMorteros(): boolean {
+  const en = contarUnidades(player.backpack!.serial, CFG.MORTERO_GRAPHIC);
+  if (en >= CFG.MORTEROS_EN_MOCHILA) return true;
+  const disponibles = contarUnidades(serialBolsaMorteros, CFG.MORTERO_GRAPHIC);
+  if (disponibles === 0) return en > 0;
+  const faltan = CFG.MORTEROS_EN_MOCHILA - en;
+  const caben = Math.floor(pesoLibre() / CFG.MORTERO_PESO);
+  const aMover = Math.min(faltan, disponibles, caben);
+  if (aMover > 0) moverUnidades(serialBolsaMorteros, player.backpack!.serial, CFG.MORTERO_GRAPHIC, aMover);
+  return contarUnidades(player.backpack!.serial, CFG.MORTERO_GRAPHIC) > 0;
+}
+
+function reponerReactivos(): boolean {
+  for (const recurso of def.recursos) {
+    const esFrasco = recurso.graphic === G.FRASCO;
+    const bolsaOrigen = esFrasco ? serialBolsaFrascos : serialBolsaReactivos;
+
+    const en = contarUnidades(player.backpack!.serial, recurso.graphic, recurso.hue);
+    if (en >= recurso.cantidad) continue;
+    const disponible = contarUnidades(bolsaOrigen, recurso.graphic, recurso.hue);
+    if (disponible === 0) return false;
+    const objetivo = recurso.cantidad * craftsCaben;
+    const faltan = Math.max(0, objetivo - en);
+    const caben = Math.max(0, Math.floor((pesoLibre() - def.resultPeso) / recurso.peso));
+    const aMover = Math.min(faltan, disponible, caben);
+    if (aMover > 0) moverUnidades(bolsaOrigen, player.backpack!.serial, recurso.graphic, aMover, recurso.hue);
+  }
+  // Comprobar que hay al menos para un craft completo
+  for (const recurso of def.recursos) {
+    if (contarUnidades(player.backpack!.serial, recurso.graphic, recurso.hue) < recurso.cantidad) return false;
+  }
+  return true;
+}
+
+// ── Gestión de keg en mochila ────────────────────────────────
+//
+// Mecánica real del keg en UA:
+//   1. Doble clic en el keg (player.use)
+//   2. Aparece un cursor de objetivo (target)
+//   3. Clic en la poción que está en la mochila
+//   → La poción desaparece, el frasco vuelve vacío, el keg sube 1 carga
+//
+// El keg tiene .amount = cargas actuales. Al llegar a 1000 está lleno.
+// Mantenemos 1 keg en la mochila. Cuando se llena lo devolvemos a la
+// bolsa y sacamos uno nuevo vacío (amount = 0).
+
+function cargasKeg(keg: Item): number {
+  return keg.amount ?? 0;
+}
+
+// Lee las cargas de un keg consultando sus propiedades OPL.
+// Los kegs a medio llenar muestran en OPL algo como "Cargas: 450/1000".
+// Si no se puede leer OPL (keg vacío o sin propiedades), devuelve keg.amount
+// como fallback (que es 0 en kegs vacíos y el valor real en kegs con cargas).
+function cargasKegOPL(keg: Item): number {
+  try {
+    const opl = client.queryItemOPL(keg.serial, 3000);
+    if (opl && opl.data) {
+      // Buscar patrón "N/1000" o "Cargas: N" en los datos OPL
+      const matchSlash = opl.data.match(/(\d+)\s*\/\s*1000/);
+      if (matchSlash) return parseInt(matchSlash[1], 10);
+      const matchLabel = opl.data.match(/[Cc]argas[:\s]+(\d+)/);
+      if (matchLabel) return parseInt(matchLabel[1], 10);
+    }
+  } catch (_) { /* OPL no disponible — usar fallback */ }
+  // Fallback: .amount refleja las cargas cuando el keg ya tiene alguna
+  return keg.amount ?? 0;
+}
+
+// ── Identificación de keg por nombre OPL ────────────────────
+//
+// El problema de identificar kegs por hue es que pociones distintas
+// comparten color (ej: Fuerza y Fuerza Mejorada son ambas 0x02B8).
+//
+// Solución: leer el nombre del keg via queryItemOPL y comprobar que
+// contiene el nombre de la poción que estamos fabricando.
+// Un keg de "Fuerza Mejorada" tendrá en su OPL algo como:
+//   "Barril de pociones de Fuerza Mejorada" o "Fuerza Mejorada"
+// Un keg vacío no tiene nombre de poción — es válido para cualquier uso.
+//
+// Si OPL no está disponible (keg sin nombre) → usar fallback por hue,
+// aceptando solo kegs vacíos (hue 0) para no mezclar.
+
+function nombreKegOPL(keg: Item): string {
+  try {
+    const opl = client.queryItemOPL(keg.serial, 2000);
+    if (opl?.name) return opl.name.toLowerCase();
+    if (opl?.data) return opl.data.toLowerCase();
+  } catch (_) {}
+  return "";
+}
+
+function kegEsCompatible(keg: Item): boolean {
+  const cargas = cargasKegOPL(keg);
+  if (cargas >= CFG.LIMITE_KEG) return false; // lleno, no sirve
+
+  if (cargas === 0 || keg.hue === 0x0000) return true; // vacío, sirve para cualquiera
+
+  // Keg con contenido — comprobar que es de ESTA poción por nombre OPL
+  const nombre = nombreKegOPL(keg);
+  if (!nombre) {
+    // Sin nombre OPL — usar hue como último recurso, solo si coincide exactamente
+    return keg.hue === def.resultHue;
+  }
+  // El nombre del keg debe contener el nombre de la poción (case-insensitive)
+  return nombre.includes(def.nombre.toLowerCase());
+}
+
+function buscarKegCompatibleEn(contenedor: any): Item | null {
+  let mejorKeg:    Item | null = null;
+  let mejorCargas: number      = -1;
+  let kegVacio:    Item | null = null;
+
+  for (const g of KEG_GRAPHICS) {
+    const candidatos = client.findAllItemsOfType(g, null, contenedor, null, 0) as Item[];
+    for (const k of candidatos) {
+      if (!kegEsCompatible(k)) continue;
+      const cargas = cargasKegOPL(k);
+      if (cargas === 0 || k.hue === 0x0000) {
+        if (!kegVacio) kegVacio = k; // guardar primer vacío como respaldo
+      } else if (cargas > mejorCargas) {
+        mejorCargas = cargas;
+        mejorKeg    = k; // preferir el que ya tenga cargas de esta poción
+      }
+    }
+  }
+  return mejorKeg ?? kegVacio;
+}
+
+function reponerKegEnMochila(): boolean {
+  // Paso 1: comprobar si ya hay un keg compatible en mochila con espacio
+  const kegEnMochila = buscarKegCompatibleEn(player.backpack);
+  if (kegEnMochila) return true; // ya hay uno, sin mensaje
+
+  // Puede haber un keg en mochila pero lleno — devolverlo a la bolsa de kegs llenos
+  for (const g of KEG_GRAPHICS) {
+    const llenos = client.findAllItemsOfType(g, null, player.backpack, null, 0) as Item[];
+    for (const k of llenos) {
+      const cargas = cargasKegOPL(k);
+      if (cargas >= CFG.LIMITE_KEG) {
+        player.moveItem(k, { serial: serialKegLlenos }, 0, 0, 0, 1);
+        sleep(CFG.SLEEP_MOVE);
+      }
+    }
+  }
+
+  // Paso 2: buscar en la bolsa de kegs vacíos/semillenos
+  const kegEnBolsa = buscarKegCompatibleEn({ serial: serialDestino });
+  if (!kegEnBolsa) {
+    err(`No hay kegs disponibles para "${def.nombre}" (ni a medias, ni vacíos).`);
+    return false;
+  }
+
+  player.moveItem(kegEnBolsa, player.backpack!, 0, 0, 0, 1);
+  sleep(CFG.SLEEP_MOVE);
+  return true;
+}
+
+function meterEnKeg(): boolean {
+  let keg = buscarKegCompatibleEn(player.backpack);
+  if (!keg) {
+    if (!reponerKegEnMochila()) return false;
+    keg = buscarKegCompatibleEn(player.backpack);
+    if (!keg) return false;
+  }
+
+  if (cargasKegOPL(keg) >= CFG.LIMITE_KEG) {
+    if (!reponerKegEnMochila()) return false;
+    keg = buscarKegCompatibleEn(player.backpack);
+    if (!keg) return false;
+  }
+
+  const pocion = client.findType(def.resultGraphic, def.resultHue, player.backpack, null, 0);
+  if (!pocion) { err("No se encontró la poción en la mochila."); return false; }
+
+  journal.clear();
+  player.use(keg);
+  const cursorAbierto = target.wait(3000);
+  if (!cursorAbierto) { err("El keg no abrió cursor de objetivo."); return false; }
+  target.entity(pocion);
+
+  // Detectar si el servidor indica que el barril está lleno
+  const respKeg = journal.waitForTextAny(["El barril esta lleno", "barril lleno"], undefined, 2000);
+  if (respKeg !== null) {
+    // El servidor lo confirmó — sacar el keg lleno y reponer
+    if (!reponerKegEnMochila()) return false;
+  }
+
+  sleep(CFG.SLEEP_MOVE);
+  return true;
+}
+
+
+// ── Cargar keg inicial en mochila si USAR_KEG ──
+if (USAR_KEG) {
+  if (!reponerKegEnMochila()) {
+    err("No se pudo cargar ningún keg en la mochila. Macro detenida.");
+    exit();
+  }
+}
+
+// ============================================================
+// BLOQUE 9 — BUCLE DE FABRICACIÓN
+// ============================================================
+
+let fabricadas = 0;
+
+while (true) {
+
+  // ── Skill cap si modo macreo ──
+  if (CFG.MODO_MACREO) {
+    const sk = player.getSkill(Skills.Alchemy);
+    if (sk && sk.value / 10 >= 100.0) {
+      cfg("Alchemy 100.0 alcanzado. Macro detenida.");
+      break;
+    }
+  }
+
+  // ── Vaciar cualquier poción acumulada antes de seguir ──
+  // Esto garantiza que nunca queden 2 pociones del mismo color en mochila.
+  // Se ejecuta al inicio de cada iteración, no solo tras éxito, así cubre
+  // también pociones que pudieran haber quedado de iteraciones anteriores.
+  if (USAR_KEG) {
+    let pocionSuelta = client.findType(def.resultGraphic, def.resultHue, player.backpack, null, 0);
+    while (pocionSuelta) {
+      if (!meterEnKeg()) break;
+      pocionSuelta = client.findType(def.resultGraphic, def.resultHue, player.backpack, null, 0);
+    }
+  }
+
+  // ── Comprobar keg disponible ──
+  if (USAR_KEG) {
+    if (!reponerKegEnMochila()) break;
+  }
+
+  // ── Morteros ──
+  if (!reponerMorteros()) break;
+
+  // ── Reactivos ──
+  if (!reponerReactivos()) break;
+
+  // ── Abrir menú, navegar a la poción y fabricar ──
+  const mortero = client.findType(CFG.MORTERO_GRAPHIC, null, player.backpack, null, 0);
+  if (!mortero) { err("Mortero desapareció de la mochila."); break; }
+
+  player.use(mortero);
+  const gumpA = Gump.findOrWait(CFG.GUMP_ALQUIMIA, 3000);
+  if (!gumpA || !gumpA.exists) {
+    err("No se abrió el menú de alquimia. Reintentando...");
+    sleep(1000);
+    continue;
+  }
+
+  gumpA.reply(def.categoriaId);
+  sleep(CFG.SLEEP_NAV);
+
+  const gumpB = Gump.findOrWait(CFG.GUMP_ALQUIMIA, 2000);
+  if (!gumpB || !gumpB.exists) {
+    err("El menú desapareció al seleccionar categoría. Reintentando...");
+    sleep(1000);
+    continue;
+  }
+
+  if (def.paginaSiguiente) {
+    gumpB.reply(CFG.BTN_SIGUIENTE);
+    sleep(CFG.SLEEP_NAV);
+    const gumpC = Gump.findOrWait(CFG.GUMP_ALQUIMIA, 2000);
+    if (!gumpC || !gumpC.exists) {
+      err("El menú desapareció al paginar. Reintentando...");
+      sleep(1000);
+      continue;
+    }
+    gumpC.reply(def.pocionId);
+  } else {
+    gumpB.reply(def.pocionId);
+  }
+  sleep(CFG.SLEEP_NAV);
+
+  const gump = Gump.findOrWait(CFG.GUMP_ALQUIMIA, 2000);
+  if (!gump || !gump.exists) {
+    err("El menú desapareció al seleccionar poción. Reintentando...");
+    sleep(1000);
+    continue;
+  }
+
+  // Limpiar journal justo antes de fabricar y comprobar world save
+  journal.clear();
+  checkWorldSave();
+  gump.reply(CFG.BTN_FABRICAR_ULTIMO);
+
+  const resp = journal.waitForTextAny(TODOS_MSGS_CRAFT, undefined, CFG.TIMEOUT_CRAFT);
+
+  if (resp === null) { sleep(1000); continue; }
+  if (JOURNAL_FABRICACION.SIN_MATERIAL.some(m => resp.includes(m))) break;
+  if (JOURNAL_FABRICACION.ERROR_CRAFT.some(m => resp.includes(m))) { sleep(1000); continue; }
+
+  // Éxito — meter la poción en el keg o moverla al destino inmediatamente
+  fabricadas++;
+
+  const fabricada = client.findType(def.resultGraphic, def.resultHue, player.backpack, null, 0);
+  if (fabricada) {
+    if (USAR_KEG) {
+      if (!meterEnKeg()) break;
+    } else {
+      player.moveItem(fabricada, { serial: serialDestino }, 0, 0, 0, 1);
+      sleep(CFG.SLEEP_MOVE);
+    }
+  }
+}
+
+cfg(`Finalizado. Pociones fabricadas: ${fabricadas}.`);
