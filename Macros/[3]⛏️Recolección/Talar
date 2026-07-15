@@ -1,0 +1,909 @@
+// ============================================================
+// MACRO: Deforestación automática — Ultima Alianza
+// Versión: 5.0
+// Autores: Ciroc + Over
+//
+// ¿QUÉ HACE?
+//   Ciclo automático completo de tala:
+//   1. Comprueba AlwaysRun y lo activa si no está activo.
+//   2. Comprueba montura y se monta si no lo está.
+//   3. Si no está en el punto de casa, hace recall antes de empezar.
+//   4. Hace recall al bosque actual.
+//   5. Escanea los árboles del bosque UNA SOLA VEZ por bosque.
+//      En visitas sucesivas al mismo bosque (por peso lleno) reusa
+//      la lista y salta los árboles ya marcados como agotados.
+//   6. Navega a cada árbol usando pathfinding BFS (evita obstáculos).
+//   7. Tala cada árbol hasta agotarlo o hasta alcanzar el límite de peso.
+//      Si el servidor dice "No lo alcanzas", se mueve al lado opuesto.
+//   8. Si se llena antes de agotar el bosque → vuelve a casa, descarga
+//      y vuelve AL MISMO BOSQUE a continuar desde donde lo dejó.
+//   9. Solo pasa al siguiente bosque cuando el actual está completamente
+//      agotado.
+//  10. Detecta world saves y pausa hasta que terminen.
+//
+// REQUISITOS:
+//   - Cofre en casa para descargar madera y ámbar.
+//   - Bolsa de suministros dentro del cofre con:
+//       · Hacha, reactivos de recall, comida.
+//   - Libro de runas de bosques.
+//   - Libro de runas con la runa de casa.
+//   - Magery suficiente para Recall.
+//
+// PUNTO DE INICIO:
+//   Configura HOME_X / HOME_Y con las coordenadas donde aterriza
+//   la runa de casa. Si están a 0, la macro imprime las coordenadas
+//   actuales y para para que puedas copiarlas.
+//
+// MONTURA:
+//   SERIAL_MONTURA = serial del ítem de montura en la mochila.
+//   Ponlo a 0 para desactivar.
+//
+// FÓRMULA DE BOTONES DEL RUNEBOOK (UA — mapeada por escaneo):
+//   Renombrar libro  → botón 1
+//   Sacar runa N     → 3 + (N-1) * 6
+//   Recall runa N    → 5 + (N-1) * 6
+//   Gate runa N      → 6 + (N-1) * 6
+//
+// PATHFINDING BFS:
+//   Calcula el camino óptimo tile a tile evitando obstáculos (árboles).
+//   Radio configurable. Si no hay camino, el árbol se descarta.
+//   Cada paso usa dos llamadas a player.run() — la primera rota,
+//   la segunda mueve (comportamiento de ClassicUO).
+//
+// WORLD SAVE:
+//   Detecta el aviso de 1 minuto antes del save y espera a que
+//   termine antes de continuar. Añadir checkWorldSave() donde sea
+//   necesario en macros adicionales.
+//
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+
+const CFG = {
+
+  // ── Punto de inicio (coordenadas de la runa de casa) ───────
+  // Ponlos a 0 para que la macro te diga tus coordenadas actuales.
+  HOME_X:               2035,
+  HOME_Y:               2840,
+
+  // ── Montura ───────────────────────────────────────────────
+  // Serial del ítem de montura en la mochila. 0 = desactivado.
+  // Obtenerlo: haz clic en la montura → log(target.query(false).serial)
+  SERIAL_MONTURA:       0x40D72C41,
+
+  // ── Seriales de objetos en casa ────────────────────────────
+  // 0 = la macro te pedirá que hagas clic en cada uno al iniciar.
+  SERIAL_COFRE:         0x42ECC736,
+  SERIAL_BOLSA:         0x421B85AD,
+  SERIAL_LIBRO_BOSQUES: 0x41A199E3,
+  SERIAL_LIBRO_CASA:    0x42ED8E62,
+
+  // ── Libro de runas de bosques ──────────────────────────────
+  // Cuántas runas tiene el libro de bosques (máximo 16).
+  TOTAL_BOSQUES:        16,
+
+  // Posición de la runa de CASA en el libro de MOVILIDAD (1-16).
+  RUNA_CASA:            16,
+
+  // ── Límites de peso ────────────────────────────────────────
+  // Vuelve a casa cuando supera este peso.
+  PESO_VOLVER:          380,
+
+  // ── Escaneo de árboles ─────────────────────────────────────
+  // Radio en tiles donde buscar árboles al llegar al bosque.
+  PERIMETRO:            15,
+
+  // Distancia al árbol desde la que se puede talar.
+  DISTANCIA_TALA:       2,
+
+  // ── Pathfinding BFS ────────────────────────────────────────
+  // Radio de la grilla BFS centrada en el jugador (tiles).
+  BFS_RADIO:            30,
+
+  // Máximo de pasos en el camino calculado. Si supera este valor,
+  // el árbol se descarta.
+  MAX_PASOS_ARBOL:      120,
+
+  // ── Mana mínimo para recall ────────────────────────────────
+  MANA_RECALL:          20,
+
+  // ── Reactivos a mantener en mochila ───────────────────────
+  REGS_CANTIDAD:        10,
+
+  // ── Gráfico del hacha ──────────────────────────────────────
+  //   0xF43  → hacha (i_hatchet)  — la más habitual para tala
+  //   0xF49  → hacha grande (i_axe)
+  GRAPHIC_HACHA:        0xF43,
+
+  // ── Gráficos de comida ─────────────────────────────────────
+  //   0x994 = pera | 0x9D0 = manzana
+  GRAPHIC_PERA:         0x994,
+  GRAPHIC_MANZANA:      0x9D0,
+
+  // ── Tiempos de espera (ms) ─────────────────────────────────
+  SLEEP_ACCION:         600,    // entre acciones con el servidor
+  SLEEP_GUMP:           2000,   // espera apertura de gump
+  RECALL_TIMEOUT:       20000,  // timeout máximo de recall
+  SLEEP_PASO:           200,    // delay entre los dos run() por paso
+};
+
+
+// ============================================================
+// BLOQUE 2 — CONSTANTES DEL SERVIDOR (NO MODIFICAR)
+// ============================================================
+
+// Gráficos
+const GRAPHIC_TRONCOS   = 0x1BDD;
+const GRAPHIC_AMBAR     = 0xF25;
+const GRAPHIC_BPEARL    = 0xF7A;
+const GRAPHIC_MANDRAKE  = 0xF86;
+const GRAPHIC_BLOODMOSS = 0xF7B;
+
+// Rango de tiles que corresponden a árboles talables en UO
+const TREE_TILE_MIN = 3277;
+const TREE_TILE_MAX = 3302;
+
+// Serial del gump del runebook en UA
+const GUMP_RUNEBOOK = 1127;
+
+// Textos del journal de UA
+const JOURNAL = {
+  EXITO_TRONCOS: "pones el troncos en tu mochila",
+  EXITO_AMBAR:   "pieza de ambar en tu mochila",
+  ARBOL_VACIO:   "Aqui no hay nada para talar",
+  SIN_MADERA:    "Talas durante un tiempo pero no obtienes madera util",
+  NO_ALCANZAS:   "No lo alcanzas",
+};
+
+// Textos del world save de UA
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN    = "Comienza la grabacion de las bases de datos";
+
+// Fórmulas de botones del runebook (mapeadas por escaneo manual en UA)
+//   Renombrar libro → 1
+//   Sacar runa N    → 3 + (N-1) * 6
+//   Recall runa N   → 5 + (N-1) * 6
+//   Gate runa N     → 6 + (N-1) * 6
+function botonRecall(runa: number): number { return 5 + (runa - 1) * 6; }
+function botonGate(runa: number):   number { return 6 + (runa - 1) * 6; }
+function botonSacar(runa: number):  number { return 3 + (runa - 1) * 6; }
+
+
+// ============================================================
+// BLOQUE 3 — LÓGICA DE LA MACRO
+// ============================================================
+
+// ── Variables de estado ─────────────────────────────────────
+let runaBosqueActual   = 1;
+let serialCofre        = CFG.SERIAL_COFRE;
+let serialBolsa        = CFG.SERIAL_BOLSA;
+let serialLibroBosques = CFG.SERIAL_LIBRO_BOSQUES;
+let serialLibroCasa    = CFG.SERIAL_LIBRO_CASA;
+let alwaysRunActivado  = false;
+
+// Memoria de árboles agotados por bosque.
+// Se mantiene entre viajes al mismo bosque para no retalar árboles vacíos.
+// Se limpia al pasar al siguiente bosque.
+const arbolesAgotados: Map<number, Set<string>> = new Map();
+
+function marcarAgotado(bosque: number, x: number, y: number): void {
+  if (!arbolesAgotados.has(bosque)) arbolesAgotados.set(bosque, new Set());
+  arbolesAgotados.get(bosque)!.add(`${x},${y}`);
+}
+
+function estaAgotado(bosque: number, x: number, y: number): boolean {
+  return arbolesAgotados.get(bosque)?.has(`${x},${y}`) ?? false;
+}
+
+function todosAgotados(bosque: number, arboles: Arbol[]): boolean {
+  return arboles.every(a => estaAgotado(bosque, a.x, a.y));
+}
+
+// ── Utilidades ──────────────────────────────────────────────
+
+function sysInfo(msg: string): void {
+  client.sysMsg(`[TALA] ${msg}`, 0x3B2);
+}
+
+function sysWarn(msg: string): void {
+  client.sysMsg(`[TALA] ⚠ ${msg}`, 0x26);
+}
+
+function distancia(ax: number, ay: number, bx: number, by: number): number {
+  return Math.max(Math.abs(ax - bx), Math.abs(ay - by)); // Chebyshev
+}
+
+function getDirection(fromX: number, fromY: number, toX: number, toY: number): Directions {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  if (dx === 0 && dy < 0)  return Directions.North;
+  if (dx === 0 && dy > 0)  return Directions.South;
+  if (dx > 0  && dy === 0) return Directions.East;
+  if (dx < 0  && dy === 0) return Directions.West;
+  if (dx > 0  && dy < 0)  return Directions.Right;
+  if (dx > 0  && dy > 0)  return Directions.Down;
+  if (dx < 0  && dy < 0)  return Directions.Up;
+  if (dx < 0  && dy > 0)  return Directions.Left;
+  return Directions.South;
+}
+
+// ── World Save ───────────────────────────────────────────────
+// Llamar en cualquier punto del bucle principal para pausar
+// durante el guardado automático del servidor.
+
+function checkWorldSave(): void {
+  if (journal.containsText(WS_AVISO)) {
+    sysWarn("Save en 1 min. Pausando hasta que termine...");
+    journal.clear();
+    journal.waitForText(WS_INICIO, undefined, 90000);
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    sysInfo("Save terminado. Continuando.");
+    journal.clear();
+    sleep(3000);
+    return;
+  }
+  if (journal.containsText(WS_INICIO)) {
+    sysWarn("Save en curso. Esperando fin...");
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    sysInfo("Save terminado. Continuando.");
+    journal.clear();
+    sleep(3000);
+  }
+}
+
+// ── AlwaysRun ────────────────────────────────────────────────
+// Detecta si AlwaysRun está activo con un paso de prueba.
+// Si no lo está, lo activa. Solo se ejecuta una vez por sesión.
+
+function asegurarAlwaysRun(): void {
+  if (alwaysRunActivado) return;
+  sysInfo("Comprobando AlwaysRun...");
+  const xAntes = player.x;
+  const yAntes = player.y;
+  player.run(Directions.South);
+  sleep(300);
+  if (player.x === xAntes && player.y === yAntes) {
+    client.toggleAlwaysRun();
+    sleep(200);
+    sysInfo("AlwaysRun activado.");
+  } else {
+    player.run(Directions.North);
+    sleep(300);
+    sysInfo("AlwaysRun ya estaba activo.");
+  }
+  alwaysRunActivado = true;
+}
+
+// ── Montura ──────────────────────────────────────────────────
+
+function asegurarMontura(): void {
+  if (CFG.SERIAL_MONTURA === 0) return;
+  if (player.equippedItems.mount) return;
+
+  sysInfo("No montado. Buscando montura...");
+
+  const enMundo = client.findObject({ serial: CFG.SERIAL_MONTURA });
+  if (enMundo) {
+    player.use(enMundo);
+    sleep(1000);
+    if (player.equippedItems.mount) { sysInfo("Montado."); return; }
+  }
+
+  const enMochila = client.findObject({ serial: CFG.SERIAL_MONTURA }, null, player.backpack);
+  if (enMochila) {
+    player.use(enMochila);
+    sleep(1000);
+    if (player.equippedItems.mount) { sysInfo("Montado desde mochila."); return; }
+  }
+
+  sysWarn("Montura no encontrada. Continuando sin montura.");
+}
+
+// ── Punto de inicio ──────────────────────────────────────────
+
+function asegurarPuntoInicio(): void {
+  if (CFG.HOME_X === 0 && CFG.HOME_Y === 0) {
+    sysWarn("HOME_X / HOME_Y no configurados.");
+    sysWarn(`Posición actual: X=${player.x}, Y=${player.y}`);
+    sysWarn("Copia esas coordenadas en HOME_X y HOME_Y y reinicia.");
+    exit();
+  }
+  const dist = distancia(player.x, player.y, CFG.HOME_X, CFG.HOME_Y);
+  if (dist <= 3) { sysInfo("En punto de inicio. OK."); return; }
+
+  sysWarn(`Fuera del punto de inicio (dist: ${dist}). Haciendo recall a casa...`);
+  recallCasa();
+
+  if (distancia(player.x, player.y, CFG.HOME_X, CFG.HOME_Y) > 5) {
+    sysWarn("No se llegó al punto de inicio. Revisa HOME_X / HOME_Y.");
+    exit();
+  }
+  sysInfo("En punto de inicio.");
+}
+
+// ── Setup inicial ─────────────────────────────────────────────
+
+function setup(): void {
+  const necesitaSetup =
+    serialCofre === 0 || serialBolsa === 0 ||
+    serialLibroBosques === 0 || serialLibroCasa === 0;
+
+  if (!necesitaSetup) {
+    sysInfo("Seriales cargados desde configuración.");
+    return;
+  }
+
+  sysInfo("=== MODO SETUP — Identifica tus objetos ===");
+  sleep(1500);
+
+  if (serialCofre === 0) {
+    sysInfo("1/4 — Haz clic en el COFRE...");
+    const info = target.query(false);
+    if (!info?.serial) { sysWarn("Cancelado."); exit(); }
+    serialCofre = info.serial;
+    sysInfo(`Cofre: 0x${serialCofre.toString(16).toUpperCase()}`);
+    sleep(500);
+  }
+
+  if (serialBolsa === 0) {
+    player.use(serialCofre); sleep(CFG.SLEEP_GUMP);
+    sysInfo("2/4 — Haz clic en la BOLSA DE SUMINISTROS dentro del cofre...");
+    const info = target.query(false);
+    if (!info?.serial) { sysWarn("Cancelado."); exit(); }
+    serialBolsa = info.serial;
+    sysInfo(`Bolsa: 0x${serialBolsa.toString(16).toUpperCase()}`);
+    const g = Gump.last; if (g) g.close();
+    sleep(500);
+  }
+
+  if (serialLibroBosques === 0) {
+    sysInfo("3/4 — Haz clic en el LIBRO DE RUNAS DE BOSQUES...");
+    const info = target.query(false);
+    if (!info?.serial) { sysWarn("Cancelado."); exit(); }
+    serialLibroBosques = info.serial;
+    sysInfo(`Libro bosques: 0x${serialLibroBosques.toString(16).toUpperCase()}`);
+    sleep(500);
+  }
+
+  if (serialLibroCasa === 0) {
+    sysInfo("4/4 — Haz clic en el LIBRO DE RUNAS DE MOVILIDAD...");
+    const info = target.query(false);
+    if (!info?.serial) { sysWarn("Cancelado."); exit(); }
+    serialLibroCasa = info.serial;
+    sysInfo(`Libro casa: 0x${serialLibroCasa.toString(16).toUpperCase()}`);
+    sleep(500);
+  }
+
+  sysInfo("Setup completo.");
+  sleep(1000);
+}
+
+// ── Meditar ───────────────────────────────────────────────────
+
+function meditar(): void {
+  if (player.mana >= CFG.MANA_RECALL) return;
+  sysInfo(`Mana bajo (${player.mana}/${player.maxMana}). Meditando...`);
+  while (player.mana < player.maxMana) {
+    journal.clear();
+    player.useSkill(Skills.Meditation);
+    const resp = journal.waitForTextAny(
+      ["enter a meditative trance", "ya estas en un trance", "no puedes meditar", "you are already"],
+      undefined, 4000
+    );
+    if (resp && resp.includes("trance")) {
+      while (player.mana < player.maxMana) sleep(1000);
+    } else {
+      sleep(4000);
+    }
+  }
+  sysInfo(`Mana recuperado (${player.mana}/${player.maxMana}).`);
+}
+
+// ── Esperar recall ────────────────────────────────────────────
+
+function esperarRecall(xAntes: number, yAntes: number): void {
+  const inicio = Date.now();
+  while (Date.now() - inicio < CFG.RECALL_TIMEOUT) {
+    sleep(300);
+    if (player.x !== xAntes || player.y !== yAntes) {
+      sleep(1500);
+      player.say(".resend");
+      sleep(800);
+      sysInfo(`Recall OK → (${player.x}, ${player.y})`);
+      return;
+    }
+  }
+  sysWarn("Timeout en recall.");
+}
+
+// ── Recall al bosque ──────────────────────────────────────────
+
+function recallBosque(): void {
+  checkWorldSave();
+  meditar();
+  asegurarMontura();
+  sysInfo(`Recall a bosque ${runaBosqueActual}/${CFG.TOTAL_BOSQUES}...`);
+  const xAntes = player.x;
+  const yAntes = player.y;
+
+  player.use(serialLibroBosques);
+  const gump = Gump.findOrWait(GUMP_RUNEBOOK, 3000);
+  if (!gump) { sysWarn("No se abrió el libro de bosques."); return; }
+
+  gump.reply(botonRecall(runaBosqueActual));
+  esperarRecall(xAntes, yAntes);
+}
+
+// ── Recall a casa ─────────────────────────────────────────────
+
+function recallCasa(): void {
+  checkWorldSave();
+  meditar();
+  sysInfo("Recall a casa...");
+  const xAntes = player.x;
+  const yAntes = player.y;
+
+  player.use(serialLibroCasa);
+  const gump = Gump.findOrWait(GUMP_RUNEBOOK, 3000);
+  if (!gump) { sysWarn("No se abrió el libro de casa."); return; }
+
+  gump.reply(botonRecall(CFG.RUNA_CASA));
+  esperarRecall(xAntes, yAntes);
+}
+
+// ── Reponer reactivos ─────────────────────────────────────────
+
+function reponerReactivos(): void {
+  const regs = [
+    { graphic: GRAPHIC_BPEARL,    nombre: "Black Pearl"   },
+    { graphic: GRAPHIC_MANDRAKE,  nombre: "Mandrake Root" },
+    { graphic: GRAPHIC_BLOODMOSS, nombre: "Blood Moss"    },
+  ];
+
+  player.use(serialBolsa);
+  sleep(CFG.SLEEP_GUMP);
+
+  for (const reg of regs) {
+    const enMochila = client.findType(reg.graphic, null, player.backpack);
+    const actual = enMochila ? enMochila.amount : 0;
+    const necesarios = CFG.REGS_CANTIDAD - actual;
+    if (necesarios <= 0) continue;
+    const enBolsa = client.findType(reg.graphic, null, { serial: serialBolsa });
+    if (!enBolsa) { sysWarn(`Sin ${reg.nombre}.`); continue; }
+    const aMover = Math.min(necesarios, enBolsa.amount);
+    player.moveItem(enBolsa, player.backpack!, 0, 0, 0, aMover);
+    sleep(CFG.SLEEP_ACCION);
+    sysInfo(`${reg.nombre}: ${actual + aMover}/${CFG.REGS_CANTIDAD}`);
+  }
+
+  const g = Gump.last; if (g) g.close();
+  sleep(300);
+}
+
+// ── Comer ─────────────────────────────────────────────────────
+// Come hasta que el servidor confirme que está lleno.
+// Devuelve la comida sobrante a la bolsa para no desperdiciarla.
+
+const JOURNAL_LLENO = "estas demasiado lleno"; // AJUSTAR si el texto exacto de UA difiere
+const JOURNAL_COMIO = "comes";                  // AJUSTAR si el texto exacto de UA difiere
+
+function comer(): void {
+  sysInfo("Comiendo...");
+  player.use(serialBolsa);
+  sleep(CFG.SLEEP_GUMP);
+
+  while (true) {
+    let comida = client.findType(CFG.GRAPHIC_PERA,    null, { serial: serialBolsa });
+    if (!comida) comida = client.findType(CFG.GRAPHIC_MANZANA, null, { serial: serialBolsa });
+    if (!comida) { sysWarn("Sin comida en la bolsa."); break; }
+
+    player.moveItem(comida, player.backpack!, 0, 0, 0, 1);
+    sleep(CFG.SLEEP_ACCION);
+
+    const enMochila = client.findType(comida.graphic, null, player.backpack);
+    if (!enMochila) { sysWarn("No llegó la comida a la mochila."); break; }
+
+    journal.clear();
+    player.use(enMochila);
+    const resp = journal.waitForTextAny([JOURNAL_COMIO, JOURNAL_LLENO], undefined, 3000);
+
+    if (resp === JOURNAL_LLENO) {
+      const sobrante = client.findType(enMochila.graphic, null, player.backpack);
+      if (sobrante) {
+        player.moveItem(sobrante, { serial: serialBolsa }, 0, 0, 0, 1);
+        sleep(CFG.SLEEP_ACCION);
+      }
+      break;
+    }
+    if (resp !== JOURNAL_COMIO) { sysWarn("Sin respuesta al comer. Parando."); break; }
+  }
+
+  const g = Gump.last; if (g) g.close();
+  sleep(300);
+}
+
+// ── Asegurar hacha ────────────────────────────────────────────
+
+function asegurarHacha(): void {
+  const equipada = player.equippedItems.twoHanded || player.equippedItems.oneHanded;
+  if (equipada && equipada.graphic === CFG.GRAPHIC_HACHA) return;
+
+  let hacha = client.findType(CFG.GRAPHIC_HACHA, null, player.backpack);
+
+  if (!hacha) {
+    sysInfo("Hacha no en mochila. Buscando en bolsa...");
+    player.use(serialBolsa);
+    sleep(CFG.SLEEP_GUMP);
+    hacha = client.findType(CFG.GRAPHIC_HACHA, null, { serial: serialBolsa });
+    if (hacha) {
+      player.moveItem(hacha, player.backpack!, 0, 0, 0, 1);
+      sleep(CFG.SLEEP_ACCION);
+      hacha = client.findType(CFG.GRAPHIC_HACHA, null, player.backpack);
+    }
+    const g = Gump.last; if (g) g.close();
+  }
+
+  if (!hacha) { sysWarn("Sin hacha. Macro detenida."); exit(); }
+  player.equip(hacha);
+  sleep(CFG.SLEEP_ACCION);
+}
+
+// ── Descargar ─────────────────────────────────────────────────
+
+function descargarMochila(): void {
+  sysInfo("Descargando en el cofre...");
+  player.use(serialCofre);
+  sleep(CFG.SLEEP_GUMP);
+
+  let troncos = client.findType(GRAPHIC_TRONCOS, null, player.backpack);
+  while (troncos) {
+    player.moveItem(troncos, serialCofre, 0, 0, 0, troncos.amount);
+    sleep(CFG.SLEEP_ACCION);
+    troncos = client.findType(GRAPHIC_TRONCOS, null, player.backpack);
+  }
+
+  let ambar = client.findType(GRAPHIC_AMBAR, null, player.backpack);
+  while (ambar) {
+    player.moveItem(ambar, serialCofre, 0, 0, 0, ambar.amount);
+    sleep(CFG.SLEEP_ACCION);
+    ambar = client.findType(GRAPHIC_AMBAR, null, player.backpack);
+  }
+
+  sysInfo("Descarga completada.");
+  const g = Gump.last; if (g) g.close();
+  sleep(300);
+}
+
+// ── Escanear árboles ─────────────────────────────────────────
+
+interface Arbol {
+  x: number;
+  y: number;
+  z: number;
+  tile: number;
+}
+
+function escanearArboles(): Arbol[] {
+  sysInfo("Escaneando árboles...");
+  const arboles: Arbol[] = [];
+  const xi = player.x - CFG.PERIMETRO;
+  const xf = player.x + CFG.PERIMETRO;
+  const yi = player.y - CFG.PERIMETRO;
+  const yf = player.y + CFG.PERIMETRO;
+
+  for (let y = yi; y <= yf; y++) {
+    for (let x = xi; x <= xf; x++) {
+      const tiles = client.getTerrainList(x, y);
+      if (!tiles) continue;
+      for (const t of tiles) {
+        if (t.graphic >= TREE_TILE_MIN && t.graphic <= TREE_TILE_MAX) {
+          arboles.push({ x, y, z: t.z ?? 0, tile: t.graphic });
+          break;
+        }
+      }
+    }
+  }
+
+  arboles.sort((a, b) =>
+    distancia(player.x, player.y, a.x, a.y) -
+    distancia(player.x, player.y, b.x, b.y)
+  );
+
+  sysInfo(`${arboles.length} árboles detectados.`);
+  return arboles;
+}
+
+// ── Movimiento — paso doble ───────────────────────────────────
+// En ClassicUO el primer run() rota, el segundo mueve.
+
+function moverUn(dir: Directions): void {
+  player.run(dir);
+  sleep(CFG.SLEEP_PASO);
+  player.run(dir);
+  sleep(CFG.SLEEP_PASO);
+}
+
+// ── Pathfinding BFS ───────────────────────────────────────────
+// Calcula el camino óptimo al árbol evitando otros árboles como
+// obstáculos. Devuelve array de Directions o null si no hay ruta.
+
+function calcularCaminoBFS(tx: number, ty: number): Directions[] | null {
+  const ox   = player.x - CFG.BFS_RADIO;
+  const oy   = player.y - CFG.BFS_RADIO;
+  const SIZE = CFG.BFS_RADIO * 2 + 1;
+
+  const sx = player.x - ox;
+  const sy = player.y - oy;
+  const ex = tx - ox;
+  const ey = ty - oy;
+
+  if (ex < 0 || ex >= SIZE || ey < 0 || ey >= SIZE) return null;
+
+  const visited = new Uint8Array(SIZE * SIZE);
+  const parent  = new Int32Array(SIZE * SIZE).fill(-1);
+
+  const DIRS: [number, number, Directions][] = [
+    [ 0, -1, Directions.North],
+    [ 1,  0, Directions.East ],
+    [ 0,  1, Directions.South],
+    [-1,  0, Directions.West ],
+    [ 1, -1, Directions.Right],
+    [ 1,  1, Directions.Down ],
+    [-1,  1, Directions.Left ],
+    [-1, -1, Directions.Up   ],
+  ];
+
+  const startIdx = sx + sy * SIZE;
+  const endIdx   = ex + ey * SIZE;
+  const queue: number[] = [startIdx];
+  visited[startIdx] = 1;
+  let found = false;
+
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    if (cur === endIdx) { found = true; break; }
+
+    const cx = cur % SIZE;
+    const cy = Math.floor(cur / SIZE);
+
+    for (const [dx, dy] of DIRS) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE) continue;
+      const nIdx = nx + ny * SIZE;
+      if (visited[nIdx]) continue;
+
+      if (nIdx !== endIdx) {
+        const tiles = client.getTerrainList(nx + ox, ny + oy);
+        if (tiles) {
+          let esArbol = false;
+          for (const t of tiles) {
+            if (t.graphic >= TREE_TILE_MIN && t.graphic <= TREE_TILE_MAX) {
+              esArbol = true; break;
+            }
+          }
+          if (esArbol) continue;
+        }
+      }
+
+      visited[nIdx] = 1;
+      parent[nIdx]  = cur;
+      queue.push(nIdx);
+    }
+  }
+
+  if (!found) return null;
+
+  const pathIdxs: number[] = [];
+  let cur = endIdx;
+  while (cur !== startIdx) {
+    pathIdxs.unshift(cur);
+    cur = parent[cur];
+    if (cur === -1) return null;
+  }
+
+  if (pathIdxs.length > CFG.MAX_PASOS_ARBOL) return null;
+
+  const path: Directions[] = [];
+  let prev = startIdx;
+  for (const idx of pathIdxs) {
+    const px = prev % SIZE;
+    const py = Math.floor(prev / SIZE);
+    const nx = idx  % SIZE;
+    const ny = Math.floor(idx  / SIZE);
+    path.push(getDirection(px, py, nx, ny));
+    prev = idx;
+  }
+
+  return path;
+}
+
+function acercarseAArbol(arbol: Arbol): boolean {
+  if (distancia(player.x, player.y, arbol.x, arbol.y) <= CFG.DISTANCIA_TALA) return true;
+
+  sysInfo(`BFS hacia (${arbol.x},${arbol.y})...`);
+  const camino = calcularCaminoBFS(arbol.x, arbol.y);
+
+  if (!camino) {
+    sysWarn(`Sin ruta BFS hacia (${arbol.x},${arbol.y}). Descartado.`);
+    return false;
+  }
+
+  sysInfo(`Ruta: ${camino.length} pasos.`);
+
+  for (let i = 0; i < camino.length; i++) {
+    if (distancia(player.x, player.y, arbol.x, arbol.y) <= CFG.DISTANCIA_TALA) return true;
+    moverUn(camino[i]);
+
+    // Cada 8 pasos recalcular si nos desviamos (lag, NPCs que empujan, etc.)
+    if (i > 0 && i % 8 === 0) {
+      if (distancia(player.x, player.y, arbol.x, arbol.y) <= CFG.DISTANCIA_TALA) return true;
+      if (distancia(player.x, player.y, arbol.x, arbol.y) > camino.length - i + 3) {
+        sysInfo("Desviación. Recalculando BFS...");
+        return acercarseAArbol(arbol);
+      }
+    }
+  }
+
+  return distancia(player.x, player.y, arbol.x, arbol.y) <= CFG.DISTANCIA_TALA;
+}
+
+// ── Talar un árbol ────────────────────────────────────────────
+// Devuelve: "agotado" | "lleno" | "fallo"
+
+function talarArbol(arbol: Arbol, bosque: number): "agotado" | "lleno" | "fallo" {
+  while (true) {
+    if (player.weight >= CFG.PESO_VOLVER) {
+      sysInfo(`Peso ${player.weight}. Volviendo a casa.`);
+      return "lleno";
+    }
+
+    // Acercarse si nos alejamos
+    if (distancia(player.x, player.y, arbol.x, arbol.y) > CFG.DISTANCIA_TALA) {
+      const ok = acercarseAArbol(arbol);
+      if (!ok) return "fallo";
+    }
+
+    const hacha = player.equippedItems.twoHanded || player.equippedItems.oneHanded;
+    if (!hacha || hacha.graphic !== CFG.GRAPHIC_HACHA) {
+      asegurarHacha(); continue;
+    }
+
+    journal.clear();
+    player.use(hacha);
+    const cursorAbierto = target.wait(5000);
+    if (!cursorAbierto) { sysWarn("Sin cursor de tala."); return "fallo"; }
+
+    target.terrain(arbol.x, arbol.y, arbol.z, arbol.tile);
+
+    const resp = journal.waitForTextAny([
+      JOURNAL.EXITO_TRONCOS,
+      JOURNAL.EXITO_AMBAR,
+      JOURNAL.ARBOL_VACIO,
+      JOURNAL.SIN_MADERA,
+      JOURNAL.NO_ALCANZAS,
+    ], undefined, 10000);
+
+    if (resp === JOURNAL.EXITO_TRONCOS || resp === JOURNAL.EXITO_AMBAR) {
+      continue;
+    }
+
+    if (resp === JOURNAL.ARBOL_VACIO) {
+      sysInfo(`Árbol (${arbol.x},${arbol.y}) agotado.`);
+      marcarAgotado(bosque, arbol.x, arbol.y);
+      return "agotado";
+    }
+
+    if (resp === JOURNAL.SIN_MADERA) {
+      sleep(500); continue;
+    }
+
+    if (resp === JOURNAL.NO_ALCANZAS) {
+      // Moverse al lado opuesto del árbol para atacarlo desde otro ángulo
+      sysInfo("No alcanza. Moviendo al lado opuesto...");
+      const dx = arbol.x - player.x;
+      const dy = arbol.y - player.y;
+      const destX = arbol.x + (dx > 0 ? 1 : dx < 0 ? -1 : 0);
+      const destY = arbol.y + (dy > 0 ? 1 : dy < 0 ? -1 : 0);
+      const ok = acercarseAArbol({ ...arbol, x: destX, y: destY });
+      if (!ok) return "fallo";
+      continue;
+    }
+
+    sleep(500);
+  }
+}
+
+// ── Talar el bosque completo ──────────────────────────────────
+// Devuelve true si todos los árboles están agotados.
+
+function talarBosque(arboles: Arbol[], bosque: number): boolean {
+  for (const arbol of arboles) {
+    if (estaAgotado(bosque, arbol.x, arbol.y)) continue;
+    if (player.weight >= CFG.PESO_VOLVER) return false;
+
+    checkWorldSave();
+
+    const resultado = talarArbol(arbol, bosque);
+    if (resultado === "lleno") return false;
+    // "agotado" o "fallo" → siguiente árbol
+  }
+
+  return todosAgotados(bosque, arboles);
+}
+
+// ── Siguiente bosque ──────────────────────────────────────────
+
+function siguienteBosque(): void {
+  arbolesAgotados.delete(runaBosqueActual); // limpiar memoria del bosque terminado
+  runaBosqueActual++;
+  if (runaBosqueActual > CFG.TOTAL_BOSQUES) {
+    runaBosqueActual = 1;
+    sysInfo("Vuelta completa. Reiniciando desde bosque 1.");
+  }
+  sysInfo(`Próximo bosque: ${runaBosqueActual}`);
+}
+
+
+// ============================================================
+// INICIO
+// ============================================================
+
+setup();
+
+sysInfo("=== COMPROBACIONES INICIALES ===");
+asegurarAlwaysRun();
+asegurarPuntoInicio();
+asegurarMontura();
+
+sysInfo("Preparando personaje...");
+asegurarHacha();
+reponerReactivos();
+comer();
+
+sysInfo("Iniciando ciclo de tala...");
+
+// Lista de árboles del bosque actual.
+// Se escanea UNA SOLA VEZ por bosque y se reutiliza en visitas
+// sucesivas al mismo bosque (por peso lleno).
+let arbolesActuales: Arbol[] = [];
+let bosqueEscaneado = false;
+
+while (true) {
+  checkWorldSave();
+  asegurarMontura();
+  recallBosque();
+  asegurarHacha();
+
+  // Escanear solo la primera vez que visitamos este bosque
+  if (!bosqueEscaneado) {
+    arbolesActuales = escanearArboles();
+    bosqueEscaneado = true;
+  }
+
+  const bosqueTerminado = talarBosque(arbolesActuales, runaBosqueActual);
+
+  recallCasa();
+  descargarMochila();
+  reponerReactivos();
+  comer();
+  asegurarHacha();
+
+  if (bosqueTerminado) {
+    sysInfo(`Bosque ${runaBosqueActual} agotado. Pasando al siguiente.`);
+    bosqueEscaneado = false;
+    arbolesActuales = [];
+    siguienteBosque();
+  } else {
+    sysInfo(`Volviendo al bosque ${runaBosqueActual} a continuar...`);
+    // bosqueEscaneado sigue true — no rescanea, continúa donde lo dejó
+  }
+
+  sleep(500);
+}
