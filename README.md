@@ -18,8 +18,9 @@ Colección organizada de macros para ClienteWeb, diseñadas para automatizar tar
 🔥Cómo probar el script y corregir posibles errores<br>
 🔧Cómo adaptar y modificar un script ya existente<br>       
 
-## 👤 Autor
-**Barack Segoviain (Over is back again)**  
+## 👤 Autores
+**OVER**  
+**CIROC**
 
 ## 📜 Licencia
 Este proyecto se distribuye bajo licencia MIT. Puedes usar, modificar y compartir libremente el contenido.
