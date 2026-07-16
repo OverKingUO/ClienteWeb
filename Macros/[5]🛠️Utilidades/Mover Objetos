@@ -20,7 +20,7 @@ const IDENTIFICAR_GRAPHICS: 'SI' | 'NO' = 'NO';
 // ====================================================
 // BLOQUE 2 — CONSTANTES INTERNAS (NO MODIFICAR)
 // ====================================================
-const SLEEP_MOVE         = 600;
+const SLEEP_MOVE         = 1200;
 const SLEEP_CONTENEDOR   = 1200;
 const SLEEP_CONFIRMACION = 400;
 const SLEEP_SUELO        = 800;   // espera tras tirar al suelo para escanear
@@ -73,6 +73,15 @@ function buscarGraphicEnSuelo(graphic: number): Item | null {
   return client.findType(graphic, null, null, null, 2) as Item | null;
 }
 
+// Comprueba si serialItem está DENTRO de serialContenedor, a cualquier
+// profundidad (sub-bolsas incluidas). range=null busca en todo el árbol,
+// no solo en el contenedor directo.
+function estaContenidoEn(serialItem: number, serialContenedor: number): boolean {
+  if (serialItem === serialContenedor) return false;
+  const encontrado = client.findObject({ serial: serialItem }, null, { serial: serialContenedor }, null, null);
+  return !!encontrado;
+}
+
 
 // ====================================================
 // BLOQUE 4 — SELECCIÓN DE CONTENEDORES Y OBJETO
@@ -118,9 +127,17 @@ if (serialDestino === serialOrigen) {
   exit();
 }
 
-player.use(serialDestino);
-sleep(SLEEP_CONTENEDOR);
-info("Destino registrado.");
+// Si el origen está DENTRO del destino (por ejemplo: destino = mochila
+// padre, origen = una bolsa hija ya abierta), el destino tiene que estar
+// ya abierto por fuerza — reabrirlo (player.use) cerraría el origen, que
+// es hijo suyo, y la macro dejaría de encontrar los objetos a mover.
+if (estaContenidoEn(serialOrigen, serialDestino)) {
+  info("El destino ya estaba abierto (el origen está dentro de él) — no se vuelve a abrir.");
+} else {
+  player.use(serialDestino);
+  sleep(SLEEP_CONTENEDOR);
+  info("Destino registrado.");
+}
 
 const itemsIniciales = contarItemsEnContenedor(serialDestino);
 info(`El destino ya tiene ${itemsIniciales}/${LIMITE_CONTENEDOR} items.`);
@@ -227,19 +244,42 @@ if (IDENTIFICAR_GRAPHICS === 'SI') {
 // ====================================================
 // BLOQUE 6 — CÁLCULO DE DIRECCIÓN Y PESO REAL
 // ====================================================
+//
+// 3 escenarios posibles según dónde estén origen y destino:
+//
+//  1) destino = mi mochila, origen ≠ mi mochila → mi peso SUBE.
+//     Límite: mi weightMax - peso actual (lo que realmente puedo cargar).
+//
+//  2) origen = mi mochila (destino no) o ambos dentro de mi mochila →
+//     el objeto YA está contado en mi peso actual, así que sacarlo o
+//     reordenarlo nunca puede superar mi capacidad. Sin límite de peso.
+//
+//  3) ninguno es mi mochila (contenedor externo → contenedor externo,
+//     ej. bolsa hija → cofre padre) → no cargo el peso en mi inventario,
+//     pero UO sí limita cuánto puedo "arrastrar" de una vez: el TRIPLE
+//     de mi peso máximo real (fórmula UO: maxWeight = 3.5*STR + 40 →
+//     capacidad de arrastre = 3 * maxWeight). Antes esto no se comprobaba
+//     y la macro intentaba mover el stack entero de golpe.
 
 const origenEnMochila  = estaEnMochila(serialOrigen);
 const destinoEnMochila = estaEnMochila(serialDestino);
-const pesoSube         = !origenEnMochila && destinoEnMochila;
-
-if (pesoSube)  info("El peso subirá al mover. Se calculará el peso real del objeto.");
-if (!pesoSube) info("El peso no subirá. Sin límite de peso.");
-
-// Calcular el peso real del objeto si el peso sube
-// Lo hacemos moviendo un item al destino y midiendo el delta.
-let pesoUnaUnidad = 1; // fallback
+const pesoSube          = !origenEnMochila && destinoEnMochila;
+const ambosExternos     = !origenEnMochila && !destinoEnMochila;
 
 if (pesoSube) {
+  info("Destino = mi mochila. Se respetará mi peso máximo real.");
+} else if (ambosExternos) {
+  info("Origen y destino son externos. Se respetará mi capacidad de arrastre (3× mi peso máximo).");
+} else {
+  info("El objeto sale de (o se mueve dentro de) mi mochila. Sin límite de peso.");
+}
+
+// La API no expone Item.weight — el peso por unidad se mide indirectamente
+// por el delta que provoca en player.weight al pasar por MI mochila.
+// Se necesita en los casos 1 y 3; en el caso 2 no hace falta (sin límite).
+let pesoUnaUnidad = 1; // fallback si no se puede medir
+
+if (pesoSube || ambosExternos) {
   // Buscar un item en el origen para la medición
   let itemMedicion: Item | null = null;
   for (const g of todosGraphics) {
@@ -248,8 +288,13 @@ if (pesoSube) {
   }
 
   if (itemMedicion) {
+    const serialMedicion = itemMedicion.serial;
     const pesoAntes = player.weight;
-    player.moveItem(itemMedicion, { serial: serialDestino }, 0, 0, 0, 1);
+
+    // La medición SIEMPRE pasa por mi mochila — es la única forma de leer
+    // el peso vía delta. Si el destino real es externo (caso 3), esta
+    // unidad se reenvía al destino real justo después de medirla.
+    player.moveItem(itemMedicion, player.backpack!, 0, 0, 0, 1);
 
     // Esperar a que el peso cambie (máx 2s)
     const inicioMedicion = Date.now();
@@ -262,6 +307,20 @@ if (pesoSube) {
     if (deltaPeso > 0) {
       pesoUnaUnidad = deltaPeso;
       info(`Peso real del objeto: ${pesoUnaUnidad} unidad/es.`);
+
+      if (pesoSube) {
+        // El destino real ES mi mochila: la unidad de medición ya está
+        // en su sitio, no hace falta reenviarla.
+        info("Primer item ya está en el destino (mi mochila).");
+      } else {
+        // ambosExternos: reenviar la unidad de medición al destino real.
+        const enMochila = client.findObject({ serial: serialMedicion }, null, player.backpack) as Item | null;
+        if (enMochila) {
+          player.moveItem(enMochila, { serial: serialDestino }, 0, 0, 0, 1);
+          sleep(SLEEP_MOVE);
+          info("Primer item enviado al destino tras medir su peso.");
+        }
+      }
     } else if (deltaPeso < 0) {
       // El peso bajó — el item cayó al suelo (mochila llena o error)
       warn("El item cayó al suelo durante la medición de peso. Buscando y recuperando...");
@@ -278,8 +337,8 @@ if (pesoSube) {
       }
       if (!recuperado) warn("No se pudo recuperar el item del suelo. Continúa con precaución.");
     } else {
-      // Peso no cambió — el item no llegó al destino
-      warn("El item no llegó al destino durante la medición. Puede que esté en el suelo.");
+      // Peso no cambió — el item no llegó a mi mochila
+      warn("El item no llegó a mi mochila durante la medición. Puede que esté en el suelo.");
       for (const g of todosGraphics) {
         const enSuelo = client.findType(g, null, null, null, 3) as Item | null;
         if (enSuelo && (enSuelo as any).container === 0) {
@@ -330,6 +389,7 @@ function recuperarPorContenedorLleno(serialItem: number): void {
 info("Iniciando movimiento...");
 let movidos = 0;
 let parado  = false;
+let fallosConsecutivos = 0;
 
 while (true) {
   const itemsEnDestino = contarItemsEnContenedor(serialDestino);
@@ -344,70 +404,100 @@ while (true) {
 
   const item = items[0];
   const serialItemActual = item.serial;
+  const amountAntes = item.amount;
 
   journal.clear();
 
-  if (pesoSube) {
-    // Seguro de peso con el valor real calculado
-    if (player.weight + pesoUnaUnidad + 1 >= player.weightMax) {
-      warn(`Límite de peso alcanzado (${player.weight}/${player.weightMax}). Macro detenida.`);
+  // ── Calcular cuánto se puede mover de este stack ──
+  // Casos 1 y 3 (pesoSube / ambosExternos) tienen límite; el caso 2
+  // (sale de mi mochila o se mueve dentro de ella) no lo tiene: el
+  // objeto ya está contado en mi peso actual.
+  let aMover = item.amount;
+
+  if (pesoSube || ambosExternos) {
+    const limiteArrastre = (3 * player.weightMax) - player.weight; // capacidad de arrastre libre
+    const limitePeso = pesoSube
+      ? Math.max(0, player.weightMax - player.weight - 1)           // lo que me queda de capacidad real
+      : Math.max(0, limiteArrastre - 1);                             // capacidad de arrastre libre (3× max - actual)
+
+    if (limitePeso < pesoUnaUnidad) {
+      if (pesoSube) {
+        warn(`Límite de peso alcanzado (${player.weight}/${player.weightMax}). Macro detenida.`);
+      } else {
+        warn(`Capacidad de arrastre alcanzada (3×${player.weightMax} - ${player.weight} = ${limiteArrastre}). Macro detenida.`);
+      }
       parado = true;
       break;
     }
 
-    const pesoLibreReal      = Math.max(0, player.weightMax - player.weight - 1);
-    const unidadesMaxPorPeso = Math.floor(pesoLibreReal / pesoUnaUnidad);
-    const aMover             = Math.min(item.amount, Math.max(1, unidadesMaxPorPeso));
-    const pesoAntes          = player.weight;
+    const unidadesMaxPorPeso = Math.floor(limitePeso / pesoUnaUnidad);
+    aMover = Math.min(item.amount, Math.max(1, unidadesMaxPorPeso));
+  }
 
-    player.moveItem(item, { serial: serialDestino }, 0, 0, 0, aMover);
+  const pesoAntes = player.weight;
+  player.moveItem(item, { serial: serialDestino }, 0, 0, 0, aMover);
 
-    // Esperar a que el peso se actualice
+  if (pesoSube) {
+    // Solo aquí mi peso realmente cambia — se usa para confirmar el éxito.
     const inicio = Date.now();
     while (player.weight === pesoAntes && Date.now() - inicio < 2000) {
       sleep(100);
     }
     sleep(SLEEP_CONFIRMACION);
-
-    if (journal.containsText(MSG_CONTENEDOR_LLENO)) {
-      recuperarPorContenedorLleno(serialItemActual);
-      parado = true;
-      break;
-    }
-
-    if (player.weight === pesoAntes) {
-      // El peso no cambió — el item puede haber caído al suelo
-      warn("El item no llegó al destino (posiblemente cayó al suelo). Buscando...");
-      let recuperado = false;
-      for (const g of todosGraphics) {
-        const enSuelo = client.findType(g, null, null, null, 3) as Item | null;
-        if (enSuelo && (enSuelo as any).container === 0) {
-          info("Item encontrado en el suelo. Devolviéndolo al origen...");
-          player.moveItem(enSuelo, { serial: serialOrigen }, 0, 0, 0, 1);
-          sleep(SLEEP_MOVE);
-          recuperado = true;
-          break;
-        }
-      }
-      if (!recuperado) warn("No se encontró el item en el suelo. Macro detenida.");
-      parado = true;
-      break;
-    }
-
   } else {
-    const aMover    = item.amount;
-    const serAntes  = item.serial;
-    player.moveItem(item, { serial: serialDestino }, 0, 0, 0, aMover);
     sleep(SLEEP_MOVE);
+  }
 
-    if (journal.containsText(MSG_CONTENEDOR_LLENO)) {
-      recuperarPorContenedorLleno(serialItemActual);
-      parado = true;
-      break;
+  if (journal.containsText(MSG_CONTENEDOR_LLENO)) {
+    recuperarPorContenedorLleno(serialItemActual);
+    parado = true;
+    break;
+  }
+
+  if (pesoSube && player.weight === pesoAntes) {
+    // El peso no cambió — el item puede haber caído al suelo
+    warn("El item no llegó al destino (posiblemente cayó al suelo). Buscando...");
+    let recuperado = false;
+    for (const g of todosGraphics) {
+      const enSuelo = client.findType(g, null, null, null, 3) as Item | null;
+      if (enSuelo && (enSuelo as any).container === 0) {
+        info("Item encontrado en el suelo. Devolviéndolo al origen...");
+        player.moveItem(enSuelo, { serial: serialOrigen }, 0, 0, 0, 1);
+        sleep(SLEEP_MOVE);
+        recuperado = true;
+        break;
+      }
     }
+    if (!recuperado) warn("No se encontró el item en el suelo. Macro detenida.");
+    parado = true;
+    break;
+  }
 
-    const sigueEnOrigen = client.findObject({ serial: serAntes }, null, { serial: serialOrigen });
-    if (sigueEnOrigen) sleep(SLEEP_CONFIRMACION);
+  if (!pesoSube) {
+    // ambosExternos / sale de mi mochila: no hay señal de peso, verificar
+    // por presencia en el origen. Si sigue con la misma cantidad, el servidor
+    // rechazó el movimiento (lag de peso, capacidad de arrastre sobrepasada, etc.)
+    // Reducimos aMover a la mitad y reintentamos. Si con 1 unidad también falla, paramos.
+    const sigueEnOrigen = client.findObject({ serial: serialItemActual }, null, { serial: serialOrigen }) as Item | null;
+  if (!pesoSube) {
+    const sigueEnOrigen = client.findObject({ serial: serialItemActual }, null, { serial: serialOrigen }) as Item | null;
+    if (sigueEnOrigen && sigueEnOrigen.amount === amountAntes) {
+      // El servidor rechazó el movimiento — esperar más y reintentar.
+      // Si falla 5 veces seguidas, parar.
+      fallosConsecutivos++;
+      if (fallosConsecutivos >= 5) {
+        warn(`El item sigue sin moverse tras ${fallosConsecutivos} intentos. Macro detenida.`);
+        parado = true;
+        break;
+      }
+      warn(`El servidor rechazó el movimiento. Esperando antes de reintentar (${fallosConsecutivos}/5)...`);
+      sleep(1500);
+    } else {
+      fallosConsecutivos = 0;
+      if (sigueEnOrigen) sleep(SLEEP_CONFIRMACION);
+      movidos++;
+    }
+    continue;
   }
 
   movidos++;
