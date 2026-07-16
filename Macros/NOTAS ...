@@ -21,8 +21,9 @@
    - Chekeo de gumps
    - Aparición de saves
 
-4️⃣ Macros estructuradas 🧩
-   - Título / versión / autor / configuración
+4️⃣ Macros estructuradas 🧩  ⚠️REPASAR Y CONSENSUAR AL FINAL ⚠️
+   - Título / versión / autor / configuración ⚠️
+   - Comentarios internos para entender cada paso ⚠️
+   - Código de colores establecido para los mensajes del sistema (error:rojo | solicitud:X | información: X) ⚠️
    - Código organizado en bloques lógicos
-   - Comentarios internos para entender cada paso
    - Pensadas para que cualquier usuario pueda adaptarlas sin romper nada
