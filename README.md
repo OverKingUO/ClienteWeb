@@ -1,5 +1,5 @@
 # Macros para ClienteWeb – Ultima Online
-Colección organizada de macros para ClienteWeb, diseñadas para automatizar tareas comunes en Ultima Alianza (Ultima Online).  
+Colección organizada de macros para ClienteWeb, diseñadas para automatizar tareas comunes en Ultima Alianza.  
 
 ## 📁 Estructura del repositorio
 ```
@@ -27,5 +27,5 @@ Este proyecto se distribuye bajo licencia MIT. Puedes usar, modificar y comparti
 
 ## 📊 Progreso del proyecto
 
-**Macros: 8/43 (19%)**
-█████░░░░░░░░░░░
+**Macros: 10/30 (33%)**
+██████████░░░░░░░░░░░░░░░░░░░░
