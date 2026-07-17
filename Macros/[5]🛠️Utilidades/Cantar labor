@@ -1,0 +1,223 @@
+// ============================================================
+// MACRO: Canción Labor — Ultima Alianza
+// Versión: 1.0
+// Autor: Barack Segoviain
+// ============================================================
+//
+//
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+//
+// Elige la habilidad que potenciará la canción (1-8):
+const CANCION = 1;
+//
+//   1 - Minería                 5 - Artesanía
+//   2 - Herrería                6 - Escriba
+//   3 - Cocinar                 7 - Alquimia
+//   4 - Carpintería             8 - Sastrería
+
+
+// ============================================================
+// BLOQUE 2 — CONSTANTES INTERNAS (NO MODIFICAR)
+// ============================================================
+
+const GUMP_LABOR       = 0x491;
+const DURACION_EFECTO  = 168000; // ms que dura el efecto
+const INTERVALO_REINT  = 10000;  // ms entre reintentos cuando ya está bajo efecto
+const SLEEP_GUMP       = 2000;
+const SLEEP_NAV        = 600;
+const TIMEOUT_GUMP     = 5000;
+const TIMEOUT_CRAFT    = 8000;
+
+const NOMBRES_CANCION: Record<number, string> = {
+  1: "Minería", 2: "Herrería", 3: "Cocinar", 4: "Carpintería",
+  5: "Artesanía", 6: "Escriba", 7: "Alquimia", 8: "Sastrería",
+};
+
+// Fragmentos de mensajes del servidor
+const MSG_EXITO       = ["entra", "suena", "comienz", "labor"];  // canción aceptada
+const MSG_YA_TIENE    = ["ya se encuentra", "bajo los efectos"]; // ya tiene el buff
+const MSG_NO_VALIDO   = ["ocupado", "asuntos"];                  // objetivo no válido
+const MSG_FALLO       = ["fallas", "no puedes", "no tienes"];    // fallo genérico
+
+const TODOS_MSGS = [...MSG_EXITO, ...MSG_YA_TIENE, ...MSG_NO_VALIDO, ...MSG_FALLO];
+
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN    = "Comienza la grabacion de las bases de datos";
+let _wsUltimoAviso  = 0;
+let _wsUltimoInicio = 0;
+
+
+// ============================================================
+// BLOQUE 3 — VALIDACIÓN
+// ============================================================
+
+function cfg(msg: string): void { client.sysMsg(`[LABOR] ${msg}`, 0x44); }
+function err(msg: string): void { client.sysMsg(`[LABOR] ⚠ ${msg}`, 0x26); }
+
+if (CANCION < 1 || CANCION > 8) {
+  err(`CANCION debe ser un número del 1 al 8. Valor actual: ${CANCION}`);
+  exit();
+}
+
+// Comprobar skills
+const skMusica = player.getSkill(Skills.Musicianship);
+if (!skMusica || skMusica.value / 10 < 100.0) {
+  err(`Música insuficiente. Tienes ${skMusica ? (skMusica.value / 10).toFixed(1) : 0}, necesitas 100.0.`);
+  exit();
+}
+
+const skEncantar = player.getSkill(Skills.Discordance);
+if (!skEncantar || skEncantar.value / 10 < 80.0) {
+  err(`Encantar insuficiente. Tienes ${skEncantar ? (skEncantar.value / 10).toFixed(1) : 0}, necesitas 80.0.`);
+  exit();
+}
+
+cfg(`Canción: Labor (${NOMBRES_CANCION[CANCION]})`);
+
+
+// ============================================================
+// BLOQUE 4 — WORLD SAVE
+// ============================================================
+
+function checkWorldSave(): void {
+  if (journal.containsText(WS_AVISO)) {
+    const ahora = Date.now();
+    if (ahora - _wsUltimoAviso > 10000) {
+      _wsUltimoAviso = ahora;
+      client.sysMsg("[LABOR] ⚠ Save en 1 min. Pausando en 40s...", 0x26);
+      sleep(40000);
+      journal.clear();
+      const ini = journal.waitForText(WS_INICIO, undefined, 30000);
+      if (!ini) { client.sysMsg("[LABOR] ▶ Save no detectado. Continuando.", 0x44); return; }
+      journal.clear();
+      const fin = journal.waitForText(WS_FIN, undefined, 300000);
+      client.sysMsg(fin ? "[LABOR] ▶ Save terminado." : "[LABOR] ▶ Timeout 5min.", 0x44);
+      journal.clear(); sleep(2000); return;
+    }
+  }
+  if (journal.containsText(WS_INICIO)) {
+    const ahora = Date.now();
+    if (ahora - _wsUltimoInicio > 10000) {
+      _wsUltimoInicio = ahora;
+      client.sysMsg("[LABOR] ⏸ Save en curso...", 0x26);
+      journal.clear();
+      const fin = journal.waitForText(WS_FIN, undefined, 300000);
+      client.sysMsg(fin ? "[LABOR] ▶ Save terminado." : "[LABOR] ▶ Timeout 5min.", 0x44);
+      journal.clear(); sleep(2000);
+    }
+  }
+}
+
+
+// ============================================================
+// BLOQUE 5 — SELECCIÓN DEL OBJETIVO
+// ============================================================
+
+cfg("Haz clic en tu OBJETIVO...");
+const tObjetivo = target.query(false);
+if (!tObjetivo?.serial) { err("Selección cancelada."); exit(); }
+const serialObjetivo = tObjetivo.serial;
+
+const npcObj = client.findObject({ serial: serialObjetivo }) as Mobile | null;
+cfg(`Objetivo: ${npcObj?.name ?? "desconocido"} (0x${serialObjetivo.toString(16).toUpperCase()})`);
+
+
+// ============================================================
+// BLOQUE 6 — FUNCIÓN DE CANTO
+// ============================================================
+
+type ResultadoCanto = 'exito' | 'ya_tiene' | 'no_valido' | 'fallo';
+
+function cantarLabor(): ResultadoCanto {
+  // Lanzar la canción
+  journal.clear();
+  player.say(".cancion15");
+
+  // Esperar el gump de selección de habilidad
+  const gump = Gump.findOrWait(GUMP_LABOR, TIMEOUT_GUMP);
+  if (!gump?.exists) {
+    // Sin gump — posiblemente fallo de instrumento o skill
+    const resp = journal.waitForTextAny(TODOS_MSGS, undefined, 2000);
+    if (resp && MSG_YA_TIENE.some(m => resp.includes(m))) return 'ya_tiene';
+    err("No apareció el menú de Labor. ¿Tienes instrumento en la mochila?");
+    return 'fallo';
+  }
+
+  // Seleccionar la habilidad configurada
+  gump.reply(CANCION);
+  sleep(SLEEP_NAV);
+
+  // Esperar el cursor de objetivo
+  const cursorAbierto = target.wait(4000);
+  if (!cursorAbierto) {
+    err("No apareció el cursor de objetivo tras seleccionar la habilidad.");
+    return 'fallo';
+  }
+
+  // Apuntar al objetivo
+  target.entity(serialObjetivo);
+
+  // Esperar respuesta del servidor
+  const resp = journal.waitForTextAny(TODOS_MSGS, undefined, TIMEOUT_CRAFT);
+  if (resp === null) return 'fallo';
+
+  if (MSG_EXITO.some(m => resp.includes(m)))    return 'exito';
+  if (MSG_YA_TIENE.some(m => resp.includes(m))) return 'ya_tiene';
+  if (MSG_NO_VALIDO.some(m => resp.includes(m))) return 'no_valido';
+  return 'fallo';
+}
+
+
+// ============================================================
+// BLOQUE 7 — BUCLE PRINCIPAL
+// ============================================================
+
+cfg("Iniciando. Esperando a poder cantar...");
+
+let tiempoProximaCantada = 0; // timestamp a partir del cual intentar cantar
+let fallosConsecutivos   = 0;
+const MAX_FALLOS         = 5;
+
+while (true) {
+
+  checkWorldSave();
+
+  // Esperar si el efecto aún está activo
+  const ahora = Date.now();
+  if (ahora < tiempoProximaCantada) {
+    sleep(1000);
+    continue;
+  }
+
+  const resultado = cantarLabor();
+
+  switch (resultado) {
+    case 'exito':
+      // Efecto aplicado — esperar la duración completa antes de renovar
+      tiempoProximaCantada = Date.now() + DURACION_EFECTO;
+      fallosConsecutivos = 0;
+      break;
+
+    case 'ya_tiene':
+      // El objetivo ya tiene el buff — reintentar en INTERVALO_REINT
+      tiempoProximaCantada = Date.now() + INTERVALO_REINT;
+      fallosConsecutivos = 0;
+      break;
+
+    case 'no_valido':
+      err("El objetivo no es válido para esta canción. Macro detenida.");
+      exit();
+
+    case 'fallo':
+      fallosConsecutivos++;
+      if (fallosConsecutivos >= MAX_FALLOS) {
+        err(`${MAX_FALLOS} fallos consecutivos. Macro detenida.`);
+        exit();
+      }
+      sleep(3000);
+      break;
+  }
+}
