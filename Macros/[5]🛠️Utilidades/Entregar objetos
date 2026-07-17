@@ -1,0 +1,161 @@
+// ============================================================
+// MACRO: Entregar items a un NPC
+// Versión: 1.0
+// Autor: Over
+// ============================================================
+//
+// ___________________________________________________
+// CONFIGURACIÓN DEL USUARIO                          |
+//                                                    |
+// Número máximo de items a entregar. (0 → todos )    |
+const MAX_ENTREGAR = 0;
+//                                                    |
+// ___________________________________________________|
+
+
+// ============================================================
+// BLOQUE 2 — CONSTANTES INTERNAS (NO MODIFICAR)
+// ============================================================
+
+const DISTANCIA_MAX  = 2;   // tiles máximos de distancia al NPC
+const SLEEP_MOVE     = 600; // ms entre entregas
+const SLEEP_WALK     = 150; // ms entre pasos de persecución
+const SLEEP_CONT     = 1200;// ms esperando apertura de contenedor
+const TIMEOUT_MOVE   = 3000;// ms esperando cambio de posición del NPC
+
+
+// ============================================================
+// BLOQUE 3 — UTILIDADES
+// ============================================================
+
+function info(msg: string): void { client.sysMsg(`[ENTREGAR] ${msg}`, 0x3B2); }
+function warn(msg: string): void { client.sysMsg(`[ENTREGAR] ⚠ ${msg}`, 0x26); }
+
+function distancia(ax: number, ay: number, bx: number, by: number): number {
+  return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+}
+
+// Mueve al jugador un paso hacia el NPC usando walk
+function acercarseAlNpc(npc: Mobile): void {
+  const dx = npc.x - player.x;
+  const dy = npc.y - player.y;
+
+  // Determinar dirección predominante
+  let dir: Directions;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    if (dx > 0 && dy > 0)       dir = Directions.Down;
+    else if (dx > 0 && dy < 0)  dir = Directions.Right;
+    else if (dx > 0)             dir = Directions.East;
+    else if (dx < 0 && dy > 0)  dir = Directions.Left;
+    else if (dx < 0 && dy < 0)  dir = Directions.Up;
+    else                         dir = Directions.West;
+  } else {
+    if (dy > 0 && dx > 0)       dir = Directions.Down;
+    else if (dy > 0 && dx < 0)  dir = Directions.Left;
+    else if (dy > 0)             dir = Directions.South;
+    else if (dy < 0 && dx > 0)  dir = Directions.Right;
+    else if (dy < 0 && dx < 0)  dir = Directions.Up;
+    else                         dir = Directions.North;
+  }
+
+  player.walk(dir);
+  sleep(SLEEP_WALK);
+}
+
+// Perseguir hasta estar a DISTANCIA_MAX tiles o menos
+function perseguirHastaRango(npc: Mobile): boolean {
+  let intentos = 0;
+  while (distancia(player.x, player.y, npc.x, npc.y) > DISTANCIA_MAX) {
+    if (intentos++ > 40) return false; // evitar bucle infinito si el NPC es inaccesible
+    acercarseAlNpc(npc);
+  }
+  return true;
+}
+
+
+// ============================================================
+// BLOQUE 4 — CONFIGURACIÓN INICIAL
+// ============================================================
+
+// Paso 1: bolsa origen
+info("1/3 — Haz clic en la BOLSA con los items a entregar...");
+const tBolsa = target.query(false);
+if (!tBolsa?.serial) { warn("Selección cancelada."); exit(); }
+const serialBolsa = tBolsa.serial;
+player.use(serialBolsa);
+sleep(SLEEP_CONT);
+info("Bolsa registrada.");
+
+// Paso 2: item a entregar
+info("2/3 — Haz clic en el ITEM que quieres entregar (debe estar en la bolsa)...");
+const tItem = target.query(false);
+if (!tItem?.serial) { warn("Selección cancelada."); exit(); }
+
+const graphicItem = tItem.graphic;
+const hueItem     = tItem.hue ?? 0;
+
+if (!graphicItem) { warn("No se pudo leer el graphic del item."); exit(); }
+
+info(`Item: graphic 0x${graphicItem.toString(16).toUpperCase()} | hue 0x${hueItem.toString(16).toUpperCase()}`);
+
+// Paso 3: NPC destinatario
+info("3/3 — Haz clic en el NPC al que entregarás los items...");
+const tNpc = target.query(false);
+if (!tNpc?.serial) { warn("Selección cancelada."); exit(); }
+const serialNpc = tNpc.serial;
+
+const npcObj = client.findObject({ serial: serialNpc }) as Mobile | null;
+if (!npcObj) { warn("No se encontró el NPC seleccionado."); exit(); }
+
+info(`NPC: ${npcObj.name ?? "desconocido"} (serial 0x${serialNpc.toString(16).toUpperCase()})`);
+info(`Límite: ${MAX_ENTREGAR === 0 ? "todos" : MAX_ENTREGAR} items.`);
+
+
+// ============================================================
+// BLOQUE 5 — BUCLE DE ENTREGA
+// ============================================================
+
+let entregados = 0;
+
+while (true) {
+
+  // Comprobar límite
+  if (MAX_ENTREGAR > 0 && entregados >= MAX_ENTREGAR) {
+    info(`Límite alcanzado. Total entregados: ${entregados}.`);
+    break;
+  }
+
+  // Buscar el siguiente item en la bolsa
+  const todos = client.findAllItemsOfType(graphicItem, null, { serial: serialBolsa }, null, 0) as Item[];
+  const item  = todos.find(it => it.hue === hueItem) ?? null;
+
+  if (!item) {
+    info(`Sin más items en la bolsa. Total entregados: ${entregados}.`);
+    break;
+  }
+
+  // Obtener posición actualizada del NPC
+  const npc = client.findObject({ serial: serialNpc }) as Mobile | null;
+  if (!npc) {
+    warn("El NPC ya no está visible. Macro detenida.");
+    break;
+  }
+
+  // Perseguir si hace falta
+  const dist = distancia(player.x, player.y, npc.x, npc.y);
+  if (dist > DISTANCIA_MAX) {
+    const alcanzado = perseguirHastaRango(npc);
+    if (!alcanzado) {
+      warn("No se pudo alcanzar al NPC. Macro detenida.");
+      break;
+    }
+  }
+
+  // Entregar: tirar el item encima del NPC (1 unidad)
+  player.moveItem(item, { serial: serialNpc }, npc.x, npc.y, npc.z, 1);
+  sleep(SLEEP_MOVE);
+
+  entregados++;
+}
+
+info(`Macro finalizada. Items entregados: ${entregados}.`);
