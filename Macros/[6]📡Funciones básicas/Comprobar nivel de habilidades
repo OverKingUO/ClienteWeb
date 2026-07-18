@@ -1,0 +1,162 @@
+// ============================================================
+// MACRO: Consultar nivel real de habilidades
+// ============================================================
+
+// ============================================================
+// CONFIGURACIÓN DE USUARIO
+// ============================================================
+//
+// Pon el número de la habilidad que quieres ver, o:
+//   "TODAS"     → muestra todas las habilidades
+//   "MACREADAS" → muestra solo las que tienen valor real > 0.0
+//
+//    1 - Alchemy / Alquimia
+//    2 - Anatomy / Anatomía
+//    3 - Animal Lore / Conocimiento animal
+//    4 - Item ID / Identificar objeto
+//    5 - Arms Lore / Conocimiento de armas
+//    6 - Parry / Parada
+//    7 - Begging / Mendigar
+//    8 - Blacksmith / Herrería
+//    9 - Fletching / Bowcraft
+//   10 - Peacemaking / Apaciguar
+//   11 - Camping / Acampada
+//   12 - Carpentry / Carpintería
+//   13 - Cartography / Cartografía
+//   14 - Cooking / Cocina
+//   15 - Detect Hidden / Detectar ocultos
+//   16 - Discordance / Encantar
+//   17 - Eval Int / Evaluar inteligencia
+//   18 - Healing / Medicina
+//   19 - Fishing / Pesca
+//   20 - Forensics / Medicina forense
+//   21 - Herding / Pastoreo
+//   22 - Hiding / Ocultarse
+//   23 - Provocation / Provocación
+//   24 - Inscribe / Inscripción
+//   25 - Lockpicking / Ganzuar
+//   26 - Magery / Magia
+//   27 - Magic Resist / Resistencia mágica
+//   28 - Tactics / Tácticas
+//   29 - Snooping / Husmear
+//   30 - Musicianship / Música
+//   31 - Poisoning / Envenenar
+//   32 - Archery / Arquería
+//   33 - Spirit Speak / Hablar con espíritus
+//   34 - Stealing / Robar
+//   35 - Tailoring / Sastrería
+//   36 - Animal Taming / Domar animales
+//   37 - Taste ID / Identificar veneno
+//   38 - Tinkering / Artesanía
+//   39 - Tracking / Rastreo
+//   40 - Veterinary / Veterinaria
+//   41 - Swords / Espadachín
+//   42 - Macing / Mazas
+//   43 - Fencing / Esgrima
+//   44 - Wrestling / Boxeo
+//   45 - Lumberjacking / Tala
+//   46 - Mining / Minería
+//   47 - Meditation / Meditación
+//   48 - Stealth / Sigilo
+//   49 - Remove Trap / Eliminar trampa
+//   50 - Necromancy / Nigromancia
+//   51 - Focus / Concentración
+//   52 - Chivalry / Caballería
+//   53 - Bushido / Bushido
+//   54 - Ninjitsu / Ninjitsu
+//   55 - Spellweaving / Tejer hechizos
+//   56 - Mysticism / Misticismo
+//   57 - Imbuing / Imbuir
+//   58 - Throwing / Lanzar
+
+const VER = "MACREADAS";
+
+
+// ============================================================
+// LÓGICA (NO MODIFICAR)
+// ============================================================
+
+const SKILLS: Array<{ skill: Skills; nombre: string }> = [
+  { skill: Skills.Alchemy,       nombre: "Alchemy / Alquimia" },
+  { skill: Skills.Anatomy,       nombre: "Anatomy / Anatomía" },
+  { skill: Skills.AnimalLore,    nombre: "Animal Lore / Conocimiento animal" },
+  { skill: Skills.ItemID,        nombre: "Item ID / Identificar objeto" },
+  { skill: Skills.ArmsLore,      nombre: "Arms Lore / Conocimiento de armas" },
+  { skill: Skills.Parry,         nombre: "Parry / Parada" },
+  { skill: Skills.Begging,       nombre: "Begging / Mendigar" },
+  { skill: Skills.Blacksmith,    nombre: "Blacksmith / Herrería" },
+  { skill: Skills.Fletching,     nombre: "Fletching / Bowcraft" },
+  { skill: Skills.Peacemaking,   nombre: "Peacemaking / Apaciguar" },
+  { skill: Skills.Camping,       nombre: "Camping / Acampada" },
+  { skill: Skills.Carpentry,     nombre: "Carpentry / Carpintería" },
+  { skill: Skills.Cartography,   nombre: "Cartography / Cartografía" },
+  { skill: Skills.Cooking,       nombre: "Cooking / Cocina" },
+  { skill: Skills.DetectHidden,  nombre: "Detect Hidden / Detectar ocultos" },
+  { skill: Skills.Discordance,   nombre: "Discordance / Encantar" },
+  { skill: Skills.EvalInt,       nombre: "Eval Int / Evaluar inteligencia" },
+  { skill: Skills.Healing,       nombre: "Healing / Medicina" },
+  { skill: Skills.Fishing,       nombre: "Fishing / Pesca" },
+  { skill: Skills.Forensics,     nombre: "Forensics / Medicina forense" },
+  { skill: Skills.Herding,       nombre: "Herding / Pastoreo" },
+  { skill: Skills.Hiding,        nombre: "Hiding / Ocultarse" },
+  { skill: Skills.Provocation,   nombre: "Provocation / Provocación" },
+  { skill: Skills.Inscribe,      nombre: "Inscribe / Inscripción" },
+  { skill: Skills.Lockpicking,   nombre: "Lockpicking / Ganzuar" },
+  { skill: Skills.Magery,        nombre: "Magery / Magia" },
+  { skill: Skills.MagicResist,   nombre: "Magic Resist / Resistencia mágica" },
+  { skill: Skills.Tactics,       nombre: "Tactics / Tácticas" },
+  { skill: Skills.Snooping,      nombre: "Snooping / Husmear" },
+  { skill: Skills.Musicianship,  nombre: "Musicianship / Música" },
+  { skill: Skills.Poisoning,     nombre: "Poisoning / Envenenar" },
+  { skill: Skills.Archery,       nombre: "Archery / Arquería" },
+  { skill: Skills.SpiritSpeak,   nombre: "Spirit Speak / Hablar con espíritus" },
+  { skill: Skills.Stealing,      nombre: "Stealing / Robar" },
+  { skill: Skills.Tailoring,     nombre: "Tailoring / Sastrería" },
+  { skill: Skills.AnimalTaming,  nombre: "Animal Taming / Domar animales" },
+  { skill: Skills.TasteID,       nombre: "Taste ID / Identificar veneno" },
+  { skill: Skills.Tinkering,     nombre: "Tinkering / Artesanía" },
+  { skill: Skills.Tracking,      nombre: "Tracking / Rastreo" },
+  { skill: Skills.Veterinary,    nombre: "Veterinary / Veterinaria" },
+  { skill: Skills.Swords,        nombre: "Swords / Espadachín" },
+  { skill: Skills.Macing,        nombre: "Macing / Mazas" },
+  { skill: Skills.Fencing,       nombre: "Fencing / Esgrima" },
+  { skill: Skills.Wrestling,     nombre: "Wrestling / Boxeo" },
+  { skill: Skills.Lumberjacking, nombre: "Lumberjacking / Tala" },
+  { skill: Skills.Mining,        nombre: "Mining / Minería" },
+  { skill: Skills.Meditation,    nombre: "Meditation / Meditación" },
+  { skill: Skills.Stealth,       nombre: "Stealth / Sigilo" },
+  { skill: Skills.RemoveTrap,    nombre: "Remove Trap / Eliminar trampa" },
+  { skill: Skills.Necromancy,    nombre: "Necromancy / Nigromancia" },
+  { skill: Skills.Focus,         nombre: "Focus / Concentración" },
+  { skill: Skills.Chivalry,      nombre: "Chivalry / Caballería" },
+  { skill: Skills.Bushido,       nombre: "Bushido / Bushido" },
+  { skill: Skills.Ninjitsu,      nombre: "Ninjitsu / Ninjitsu" },
+  { skill: Skills.Spellweaving,  nombre: "Spellweaving / Tejer hechizos" },
+  { skill: Skills.Mysticism,     nombre: "Mysticism / Misticismo" },
+  { skill: Skills.Imbuing,       nombre: "Imbuing / Imbuir" },
+  { skill: Skills.Throwing,      nombre: "Throwing / Lanzar" },
+];
+
+function mostrar(entrada: { skill: Skills; nombre: string }, numero: number): void {
+  const sk = player.getSkill(entrada.skill);
+  const valor = sk ? (sk.base / 10).toFixed(1) : "0.0";
+  client.sysMsg(`Nivel de habilidad - ${entrada.nombre}: ${valor}`, 0x44);
+}
+
+const verStr = String(VER).trim().toUpperCase();
+
+if (verStr === "TODAS") {
+  for (let i = 0; i < SKILLS.length; i++) mostrar(SKILLS[i], i + 1);
+} else if (verStr === "MACREADAS") {
+  for (let i = 0; i < SKILLS.length; i++) {
+    const sk = player.getSkill(SKILLS[i].skill);
+    if (sk && sk.base > 0) mostrar(SKILLS[i], i + 1);
+  }
+} else {
+  const num = parseInt(verStr, 10);
+  if (isNaN(num) || num < 1 || num > SKILLS.length) {
+    client.sysMsg(`[SKILLS] ⚠ VER debe ser un número del 1 al ${SKILLS.length}, "TODAS" o "MACREADAS".`, 0x26);
+  } else {
+    mostrar(SKILLS[num - 1], num);
+  }
+}
