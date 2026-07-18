@@ -1,0 +1,224 @@
+// ============================================================
+// MACRO: Identificar NPC/OBJETO
+// Haz clic en cualquier NPC para ver todas sus propiedades.
+// Úsala para encontrar cómo distinguir NPCs del mismo tipo visual.
+// ============================================================
+
+// ============================================================
+// CONFIGURACIÓN — pon "SI" o "NO" en cada bloque
+// ============================================================
+
+const BLOQUE_1_CARACTERISTICAS = "NO";
+const BLOQUE_2_NOMBRE = "NO";
+const BLOQUE_3_PROPIEDADES = "NO";
+const BLOQUE_4_EQUIPADO = "NO";
+const BLOQUE_5_PAPERDOLL = "NO";
+const BLOQUE_6_MENU_CONTEXTUAL = "SI";
+
+
+// ============================================================
+// A PARTIR DE AQUÍ NO HAY NADA QUE CONFIGURAR.
+// ============================================================
+
+function info(msg: string): void { client.sysMsg(`[NPC] ${msg}`, 0x3B2); }
+function sep(): void { client.sysMsg(`[NPC] ────────────────────────`, 0x3B2); }
+
+info("Haz clic en el NPC que quieres identificar...");
+const sel = target.query(false);
+if (!sel?.serial) { client.sysMsg("[NPC] Cancelado.", 0x26); exit(); }
+
+const npc = client.findObject({ serial: sel.serial }) as Mobile | null;
+if (!npc) { client.sysMsg("[NPC] No se encontró el objeto.", 0x26); exit(); }
+
+// ── Bloque 1: Características básicas ───────────────────────
+if (BLOQUE_1_CARACTERISTICAS === "SI") {
+  sep();
+  info(`Serial:     ${sel.serial} (0x${sel.serial.toString(16).toUpperCase()})`);
+  info(`Graphic:    ${npc.graphic} (0x${npc.graphic.toString(16).toUpperCase()})`);
+  info(`Hue:        ${npc.hue} (0x${npc.hue.toString(16).toUpperCase()})`);
+  info(`Nombre:     ${npc.name ?? "(sin nombre)"}`);
+  info(`X/Y/Z:     ${npc.x}, ${npc.y}, ${npc.z}`);
+  if ((npc as any)._tag === 'Mobile') {
+    const m = npc as Mobile;
+    info(`Notoriedad: ${m.notoriety} (0=desconocido 1=inocente 2=aliado 3=gris 4=criminal 5=enemigo 6=asesino 7=invulnerable)`);
+    info(`¿Muerto?:   ${m.isDead}`);
+    info(`¿Oculto?:   ${m.isHidden}`);
+  }
+}
+
+// ── Bloque 2: Nombre (single click) ─────────────────────────
+if (BLOQUE_2_NOMBRE === "SI") {
+  sep();
+  info("Consultando nombre (single click)...");
+  try {
+    const nombre = client.queryItemSingleClickName({ serial: sel.serial }, 4000);
+    info(`Nombre single click (API): "${nombre}"`);
+  } catch (e) {
+    info("No se pudo leer el nombre single click por API.");
+  }
+
+  // Single click real — capturar el label que emite el servidor
+  // El nombre completo ("Chantal, la Alquimista") llega como mensaje Label
+  // tras el clic. Usamos waitForTextAny con timeout corto para atraparlo.
+  journal.clear();
+  player.click({ serial: sel.serial });
+  const labelMsg = journal.waitForTextAny(
+    [npc.name ?? "???", "Alquimista", "Mago", "Comerciante", "Curandero",
+     "Herrero", "Sastre", "Banquero", "Bardo", "Minero", "Carpintero",
+     "Pescador", "Médium", "Druida", "Paladín", "Nigromante", "Maestro"],
+    undefined, 2000
+  );
+  if (labelMsg) {
+    info(`  Label capturado en journal: "${labelMsg}"`);
+  } else {
+    info("  No se capturó label en journal (puede ser mensaje tipo Label no acumulado).");
+    // Último recurso: leer el nombre del NPC via headMsg — aparece flotante sobre él
+    // No hay API directa, pero el nombre completo llega en npc.name tras el clic en algunos servidores
+    sleep(500);
+    info(`  npc.name tras clic: "${npc.name ?? "(sin cambio)"}"`);
+  }
+}
+
+// ── Bloque 3: Propiedades OPL ────────────────────────────────
+if (BLOQUE_3_PROPIEDADES === "SI") {
+  sep();
+  info("Consultando propiedades OPL (tooltip)...");
+  try {
+    const opl = client.queryItemOPL({ serial: sel.serial }, 4000);
+    if (opl) {
+      info(`OPL nombre:  "${opl.name}"`);
+      info(`OPL graphic: ${opl.graphic} (0x${opl.graphic.toString(16).toUpperCase()})`);
+      info(`OPL hue:     ${opl.hue} (0x${opl.hue.toString(16).toUpperCase()})`);
+      if (opl.data) {
+        info("OPL data (líneas):");
+        const lineas = opl.data.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        for (const linea of lineas) {
+          info(`  → "${linea}"`);
+        }
+      }
+      if (opl.properties && opl.properties.length > 0) {
+        info("OPL properties (todos los textos):");
+        for (const prop of opl.properties as any[]) {
+          const vals = (prop.values ?? []) as any[];
+          const valsSorted = [...vals].sort((a: any, b: any) => a.order - b.order);
+          let resuelto: string = prop.text ?? "";
+          for (const v of valsSorted) {
+            resuelto = resuelto.replace(/~\d+_[A-Z_]+~/, v.text ?? "");
+          }
+          resuelto = resuelto.trim();
+          if (resuelto) info(`  ► "${resuelto}"`);
+          for (const v of vals) {
+            if (v.text && v.text.trim()) {
+              info(`    [order ${v.order}] "${v.text.trim()}"`);
+            }
+          }
+        }
+      }
+    } else {
+      info("OPL no disponible para este NPC.");
+    }
+  } catch (e) {
+    info("Error al leer OPL.");
+  }
+}
+
+// ── Bloque 4: Items equipados ────────────────────────────────
+if (BLOQUE_4_EQUIPADO === "SI") {
+  sep();
+  info("Items equipados:");
+  const slots = [
+    "oneHanded","twoHanded","helmet","arms","gloves","torso","legs",
+    "shoes","shirt","pants","cloak","robe","necklace","earrings",
+    "bracelet","ring","talisman","waist","face","hair","beard"
+  ];
+  let tieneEquipado = false;
+  for (const slot of slots) {
+    const item = (npc as any).equippedItems?.[slot] as Item | undefined;
+    if (item) {
+      info(`  [${slot}] graphic: 0x${item.graphic.toString(16).toUpperCase()} hue: 0x${item.hue.toString(16).toUpperCase()} — "${item.name ?? ""}"`);
+      tieneEquipado = true;
+    }
+  }
+  if (!tieneEquipado) info("  (ninguno visible)");
+}
+
+// ── Bloque 5: Título del paperdoll ───────────────────────────
+if (BLOQUE_5_PAPERDOLL === "SI") {
+  sep();
+  info("Consultando título del paperdoll...");
+  try {
+    client.openPaperdoll({ serial: sel.serial });
+    sleep(1500);
+    const gump = Gump.last;
+    if (gump && gump.exists) {
+      info(`Gump serial: ${gump.serial} (0x${gump.serial.toString(16).toUpperCase()})`);
+      const textosPosibles = [
+        npc.name ?? "",
+        "Alquimista","Mago","Comerciante","Herrero","Herbolario",
+        "Maestro","el ","la ","Médium","Curandero","Banquero",
+        "Sastre","Carpintero","Pescador","Minero","Bardo",
+        "Paladín","Nigromante","Druida","Guardabosques",
+      ];
+      let encontrado = false;
+      for (const texto of textosPosibles) {
+        if (texto && gump.containsText(texto)) {
+          info(`  El gump contiene: "${texto}"`);
+          encontrado = true;
+        }
+      }
+      if (!encontrado) info("  No se detectó ningún título conocido en el gump.");
+      gump.close();
+    } else {
+      info("No se abrió ningún gump de paperdoll.");
+    }
+  } catch(e) {
+    info("Error al abrir el paperdoll.");
+  }
+}
+
+// ── Bloque 6: Menú contextual (clic derecho) ─────────────────
+// Esta es la señal MÁS fiable para identificar el tipo exacto de NPC:
+// los vendors/entrenadores muestran aquí literalmente "Entrenar Alquimia",
+// "Comprar", "Vender", etc. — a diferencia del skill/maestría del NPC
+// (ej. boxeo), que puede repetirse en NPCs de tipos completamente distintos.
+if (BLOQUE_6_MENU_CONTEXTUAL === "SI") {
+  sep();
+  info("Abriendo menú contextual (clic derecho)...");
+  try {
+    popupMenu.request(sel.serial, 2000);
+    const contenido = popupMenu.waitForContent(2500);
+
+    if (contenido) {
+      // info("Contenido del menú contextual (raw, para depurar la estructura):");
+      // info(`  ${JSON.stringify(contenido)}`);
+
+      // Intento de extracción legible — la forma exacta del objeto no está
+      // documentada, así que se prueban varias formas habituales.
+      const opciones: any[] =
+        Array.isArray(contenido) ? contenido :
+        Array.isArray((contenido as any).entries) ? (contenido as any).entries :
+        Array.isArray((contenido as any).items) ? (contenido as any).items :
+        [];
+
+      if (opciones.length > 0) {
+        info("Opciones detectadas:");
+        for (const opcion of opciones) {
+          const texto = opcion?.text ?? opcion?.label ?? opcion?.name ?? JSON.stringify(opcion);
+          info(`  · ${texto}`);
+        }
+      } else {
+        info("  No se pudo extraer una lista de opciones legible — revisa el raw de arriba y pásamelo para ajustar el parseo.");
+      }
+    } else {
+      info("El menú contextual no devolvió contenido (timeout o vacío).");
+    }
+  } catch (e) {
+    info("Error al abrir/leer el menú contextual.");
+  } finally {
+    // Cerrar siempre el popup, haya ido bien o mal, para no dejarlo abierto.
+    try { popupMenu.close(); } catch {}
+  }
+}
+
+sep();
+info("Diagnóstico completo.");
