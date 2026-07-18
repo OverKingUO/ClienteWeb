@@ -1,0 +1,113 @@
+// ============================================================
+// MACRO: Buscar entrenador de Magia o Inscripción cercano
+//
+// Escanea los NPCs alrededor, revisa su menú contextual (clic derecho,
+// igual que el macro "Identificar NPC" — bloque 6) y camina hacia el
+// primero que ofrezca "Entrenar Magia" o "Entrenar Inscripcion".
+// ============================================================
+
+const RANGO_BUSQUEDA      = 20;  // radio de búsqueda de NPCs, en casillas
+const RANGO_ACERCAMIENTO  = 2;   // a cuántas casillas de distancia se detiene
+const MAX_NPCS_A_ESCANEAR = 60;  // nº de intentos al iterar selectEntity
+const MAX_PASOS_CAMINANDO = 200; // límite de pasos al acercarse
+
+const TEXTOS_BUSCADOS = ["Entrenar Magia", "Entrenar Inscripcion", "Entrenar Inscripción"];
+
+function info(msg: string): void { client.sysMsg(`[BUSCAR] ${msg}`, 0x3B2); }
+function warn(msg: string): void { client.sysMsg(`[BUSCAR] ⚠ ${msg}`, 0x26); }
+
+function distancia(m: { x: number; y: number }): number {
+  return Math.max(Math.abs(player.x - m.x), Math.abs(player.y - m.y));
+}
+
+// ── Paso 1: recopilar NPCs cercanos ──────────────────────────
+
+info("Escaneando NPCs cercanos...");
+const npcsVistos = new Map<number, Mobile>();
+
+for (let i = 0; i < MAX_NPCS_A_ESCANEAR; i++) {
+  const encontrado = client.selectEntity(
+    SearchEntityOptions.Any,
+    SearchEntityRangeOptions.Next,
+    SearchEntityTypeOptions.Any,
+    false
+  );
+  if (!encontrado) continue;
+  if (encontrado.serial === player.serial) continue;
+  if (distancia(encontrado) > RANGO_BUSQUEDA) continue;
+  npcsVistos.set(encontrado.serial, encontrado);
+}
+
+info(`NPCs encontrados en rango: ${npcsVistos.size}`);
+if (npcsVistos.size === 0) { warn("No se encontró ningún NPC cerca."); exit(); }
+
+// ── Paso 2: revisar el menú contextual de cada uno ───────────
+
+let objetivo: Mobile | null = null;
+let textoEncontrado = "";
+
+for (const npc of npcsVistos.values()) {
+  info(`Comprobando "${npc.name ?? npc.serial}"...`);
+
+  popupMenu.request(npc.serial, 1500);
+  const contenido = popupMenu.waitForContent(1500) as any;
+  try { popupMenu.close(); } catch {}
+
+  if (contenido && Array.isArray(contenido.items)) {
+    const coincidencia = contenido.items.find((it: any) =>
+      TEXTOS_BUSCADOS.some(t => (it.text ?? "").toLowerCase().includes(t.toLowerCase()))
+    );
+    if (coincidencia) {
+      objetivo = npc;
+      textoEncontrado = coincidencia.text;
+      break;
+    }
+  }
+
+  sleep(600); // margen entre aperturas de menú, para no floodear al servidor
+}
+
+if (!objetivo) {
+  warn("Ningún NPC cercano ofrece Entrenar Magia ni Entrenar Inscripción.");
+  exit();
+}
+
+info(`Encontrado: "${objetivo.name ?? objetivo.serial}" — "${textoEncontrado}". Acercándome...`);
+
+// ── Paso 3: caminar hacia el NPC ──────────────────────────────
+// Mismo patrón de movimiento por diagonales que el macro de Taming
+// de la wiki (Ultima Alianza — Ejemplos de macros).
+
+let pasos = 0;
+let llegue = false;
+
+while (pasos < MAX_PASOS_CAMINANDO) {
+  const actual = client.findObject({ serial: objetivo.serial }) as Mobile | null;
+  if (!actual) { warn("Perdí de vista al NPC."); break; }
+
+  const distEW = player.x - actual.x;
+  const distNS = player.y - actual.y;
+
+  if (Math.max(Math.abs(distEW), Math.abs(distNS)) <= RANGO_ACERCAMIENTO) {
+    llegue = true;
+    break;
+  }
+
+  if (distEW > RANGO_ACERCAMIENTO && distNS > RANGO_ACERCAMIENTO)       player.walk(Directions.Up);
+  else if (distEW < -RANGO_ACERCAMIENTO && distNS < -RANGO_ACERCAMIENTO) player.walk(Directions.Down);
+  else if (distEW > RANGO_ACERCAMIENTO && distNS < -RANGO_ACERCAMIENTO) player.walk(Directions.Left);
+  else if (distEW < -RANGO_ACERCAMIENTO && distNS > RANGO_ACERCAMIENTO) player.walk(Directions.Right);
+  else if (distEW > RANGO_ACERCAMIENTO)   player.walk(Directions.West);
+  else if (distEW < -RANGO_ACERCAMIENTO)  player.walk(Directions.East);
+  else if (distNS > RANGO_ACERCAMIENTO)   player.walk(Directions.North);
+  else if (distNS < -RANGO_ACERCAMIENTO)  player.walk(Directions.South);
+
+  sleep(250);
+  pasos++;
+}
+
+if (llegue) {
+  info(`Llegué junto a "${objetivo.name ?? objetivo.serial}".`);
+} else {
+  warn("No conseguí acercarme del todo (obstáculo, se alejó, o se agotaron los intentos).");
+}
