@@ -1,0 +1,29 @@
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN    = "Comienza la grabacion de las bases de datos";
+
+function checkWorldSave(): void {
+  // Aviso previo — pausar con margen antes de que empiece
+  if (journal.containsText(WS_AVISO)) {
+    client.sysMsg("[MACRO] ⚠ Save en 1 min. Pausando hasta que termine.", 0x26);
+    journal.clear();
+    // Esperar el inicio real (máx 90s) y luego el fin (máx 3min)
+    journal.waitForText(WS_INICIO, undefined, 90000);
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    client.sysMsg("[MACRO] ▶ Save terminado. Continuando.", 0x3B2);
+    journal.clear();
+    sleep(3000);
+    return;
+  }
+
+  // Por si la macro no pilló el aviso y ya está en pleno save
+  if (journal.containsText(WS_INICIO)) {
+    client.sysMsg("[MACRO] ⏸ Save en curso. Esperando fin...", 0x26);
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    client.sysMsg("[MACRO] ▶ Save terminado. Continuando.", 0x3B2);
+    journal.clear();
+    sleep(3000);
+  }
+}
