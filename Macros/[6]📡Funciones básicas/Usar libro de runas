@@ -1,0 +1,97 @@
+// ============================================================
+// MACRO: Recall de libro
+// Versión: 4.1
+// Autor: Barack Segoviain
+//
+// FUNCIONAMIENTO:
+//   Abre el libro de runas configurado y hace recall a la runa indicada.
+//   Si falta mana, espera a recuperarlo: si Meditación < 50 espera
+//   regen pasiva, si Meditación >= 50 medita hasta el 100%.
+//   Solo muestra mensajes en pantalla si algo falla.
+//
+// USO:
+//   1. Rellena SERIAL_LIBRO con el serial de tu runebook.
+//   2. Cambia RUNA al número de runa a la que quieres ir (1-16).
+//   3. Dale play.
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+
+const SERIAL_LIBRO = 0x41E44B96;  // Serial de tu runebook.
+const RUNA         = 1;            // Runa a la que quieres hacer recall (1-16).
+
+
+// ============================================================
+// BLOQUE 2 — CONSTANTES DEL SERVIDOR (NO MODIFICAR)
+// ============================================================
+
+const GUMP_RUNEBOOK = 1127; // Serial del gump del runebook en Ultima Alianza.
+const recall = 5 + (RUNA - 1) * 6; // Fórmula de botones del runebook — mapeada en UA mediante escaneo manual.
+const MANA_RECALL = 11; // Coste de mana del hechizo Recall en UA.
+const SKILL_MEDITAR_UMBRAL = 50; // Umbral de Meditación para usar la skill en vez de esperar regen pasiva.
+
+
+// ============================================================
+// BLOQUE 3 — LÓGICA DE LA MACRO
+// ============================================================
+
+function warn(msg: string): void {
+  client.sysMsg(`[RECALL] ⚠ ${msg}`, 0x26);
+}
+
+// Asegurar mana suficiente antes de abrir el libro.
+if (player.mana < MANA_RECALL) {
+  const medSkill = player.getSkill(Skills.Meditation);
+  const medValor = medSkill ? medSkill.value / 10 : 0;
+
+  if (medValor < SKILL_MEDITAR_UMBRAL) {
+    while (player.mana < MANA_RECALL) {
+      sleep(1000);
+    }
+  } else {
+    while (player.mana < player.maxMana) {
+      journal.clear();
+      player.useSkill(Skills.Meditation);
+      const resp = journal.waitForTextAny(
+        ["enter a meditative trance", "ya estas en un trance", "no puedes meditar", "you are already"],
+        undefined, 4000
+      );
+      if (resp && resp.includes("trance")) {
+        while (player.mana < player.maxMana) sleep(1000);
+      } else {
+        sleep(4000);
+      }
+    }
+  }
+}
+
+// Abrir el runebook y esperar el gump sin delay fijo —
+// findOrWait reacciona en cuanto detecta el gump.
+player.use(SERIAL_LIBRO);
+const gump = Gump.findOrWait(GUMP_RUNEBOOK, 3000);
+if (!gump) {
+  warn("No se abrió el runebook. Comprueba el serial.");
+  exit();
+}
+
+// Guardar posición antes del recall para detectar si funcionó.
+const xAntes = player.x;
+const yAntes = player.y;
+
+gump.reply(recall);
+
+// Esperar cambio de posición — confirma recall exitoso.
+const inicio = Date.now();
+while (Date.now() - inicio < 15000) {
+  sleep(300);
+  if (player.x !== xAntes || player.y !== yAntes) {
+    sleep(800);
+    player.say(".resend");
+    exit();
+  }
+}
+
+warn("Timeout — el recall no funcionó.");
