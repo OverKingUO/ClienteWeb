@@ -1,0 +1,156 @@
+// ============================================================
+// MACRO: Comer hasta estar lleno (nivel 20)
+// Versión: 2.0
+// Autor: Barack Segoviain
+//
+// FUNCIONAMIENTO:
+//   Coge comida del cofre de una en una, la come, y repite
+//   hasta que el servidor confirma nivel 20 ("Estas lleno!"
+//   por segunda vez) o overflow ("no puedes comer mas").
+//   Devuelve siempre la unidad sobrante al cofre al terminar.
+//
+// USO:
+//   1. Rellena SERIAL_COFRE con el serial de tu cofre.
+//   2. Añade o quita gráficos en GRAFICOS_COMIDA si tienes
+//      otros tipos de comida.
+//   3. Dale play estando cerca del cofre.
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+
+const SERIAL_COFRE = 0x42ECC736;  // Serial del cofre de origen
+
+// Tipos de comida a buscar, en orden de prioridad
+const GRAFICOS_COMIDA = [
+  0x994,   // pera
+  0x9D0,   // manzana
+];
+
+const SLEEP_ACCION = 600;   // ms entre movimientos de items
+const SLEEP_GUMP   = 2000;  // ms esperando apertura del cofre
+
+
+// ============================================================
+// BLOQUE 2 — MENSAJES DEL SERVIDOR (NO MODIFICAR)
+// ============================================================
+
+// Mensajes agrupados por lo que significan para la macro.
+// El servidor envía uno de estos tras cada bocado.
+
+const MSGS_SEGUIR = [
+  "Engulles la comida, pero sigues muy hambriento.",
+  "Despues de comerlo, te sientes menos hambriento.",
+  "Estas mas saciado despues de comer.",
+  "Estas a punto de estar lleno, pero podrias comer mas.",
+  "Te sientes casi lleno despues de consumir la comida.",
+];
+
+// Este mensaje aparece al pasar de 18→19 Y de 19→20.
+// La macro necesita recibirlo DOS veces para saber que llegó a 20.
+const MSG_LLENO     = "Estas lleno!";
+
+// Este mensaje solo aparece si ya estás a 20 e intentas comer más.
+// No debería aparecer en uso normal, pero si aparece → parar.
+const MSG_OVERFLOW  = "Estas tan lleno que no puedes comer mas!";
+
+// Array completo para waitForTextAny
+const TODOS_MSGS = [...MSGS_SEGUIR, MSG_LLENO, MSG_OVERFLOW];
+
+
+// ============================================================
+// BLOQUE 3 — LÓGICA
+// ============================================================
+
+function info(msg: string): void { client.sysMsg(`[COMER] ${msg}`, 0x3B2); }
+function warn(msg: string): void { client.sysMsg(`[COMER] ⚠ ${msg}`, 0x26); }
+
+function buscarComidaEnCofre(): Item | null {
+  for (const graphic of GRAFICOS_COMIDA) {
+    const item = client.findType(graphic, null, { serial: SERIAL_COFRE });
+    if (item) return item;
+  }
+  return null;
+}
+
+// Abrir cofre
+player.use(SERIAL_COFRE);
+sleep(SLEEP_GUMP);
+
+info("Iniciando ingesta. Objetivo: nivel 20.");
+
+let vecesLleno = 0;  // Cuenta cuántas veces ha llegado MSG_LLENO
+                     // Necesitamos 2 (nivel 19→20)
+
+while (true) {
+
+  // ── 1. Buscar comida en el cofre ──
+  const comida = buscarComidaEnCofre();
+  if (!comida) {
+    warn("Sin comida en el cofre. Parando.");
+    break;
+  }
+
+  // ── 2. Coger UNA unidad a la mochila ──
+  player.moveItem(comida, player.backpack!, 0, 0, 0, 1);
+  sleep(SLEEP_ACCION);
+
+  const enMochila = client.findType(comida.graphic, null, player.backpack);
+  if (!enMochila) {
+    warn("La comida no llegó a la mochila. Reintentando...");
+    sleep(1000);
+    continue;
+  }
+
+  // ── 3. Comer y escuchar respuesta ──
+  journal.clear();
+  player.use(enMochila);
+
+  const resp = journal.waitForTextAny(TODOS_MSGS, undefined, 4000);
+
+  if (resp === null) {
+    warn("Sin respuesta del servidor (timeout). Comprueba los textos de UA.");
+    break;
+  }
+
+  if (resp === MSG_OVERFLOW) {
+    // Ya estaba a 20 antes de empezar o algo fue mal
+    info("Ya estás completamente lleno (overflow). Devolviendo sobrante.");
+    break;
+  }
+
+  if (resp === MSG_LLENO) {
+    vecesLleno++;
+    info(`"Estas lleno!" × ${vecesLleno}`);
+    if (vecesLleno >= 2) {
+      // Segunda vez = nivel 20 alcanzado
+      info("¡Nivel 20 alcanzado! Devolviendo sobrante al cofre.");
+      break;
+    }
+    // Primera vez = nivel 19, hay que comer una más
+    continue;
+  }
+
+  if (MSGS_SEGUIR.includes(resp as string)) {
+    // Sigues con hambre, sigue comiendo
+    continue;
+  }
+
+  // Respuesta desconocida — mensaje nuevo del servidor
+  warn(`Respuesta inesperada: "${resp}". Parando por seguridad.`);
+  break;
+}
+
+// ── 4. Devolver sobrante al cofre ──
+for (const graphic of GRAFICOS_COMIDA) {
+  const sobrante = client.findType(graphic, null, player.backpack);
+  if (sobrante) {
+    player.moveItem(sobrante, SERIAL_COFRE, 0, 0, 0, sobrante.amount);
+    sleep(SLEEP_ACCION);
+    info(`Devuelta comida sobrante al cofre (graphic 0x${graphic.toString(16)}).`);
+  }
+}
+
+info("Macro finalizada.");
