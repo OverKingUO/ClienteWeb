@@ -4,7 +4,7 @@ Colección organizada de macros para ClienteWeb, diseñadas para automatizar tar
 ## 📁 Estructura del repositorio
 ```
 ⚙️ Macros
-├── 🔥combate
+├── 🔥Combate
 ├── ⚔️Entrenamiento
 ├── ⛏️Recoleccion
 ├── 🧪Elaboración
