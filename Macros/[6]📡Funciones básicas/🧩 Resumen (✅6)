@@ -8,6 +8,13 @@
     - Consideredas TODAS las habilidades (58)
     - Tiene en cuenta solo el nivel REAL
 
+✅ Obtener propiedades de objetos y personas [1 AJUSTE + 1 ACCIÓN] 🚧EN PROCESO🚧
+  - AJUSTES: Indicar datos a mostrar
+  - ACCIONES: seleccionar el objetivo de interés
+  - OBJETIVO: Conocer todas las propiedades posibles de nuestro objetivo (npc, objeto, player...)
+
+✅ Identificar NPCs y aproximarse 🚧EN PROCESO🚧
+
 ✅ Usar libro de runas  [2 AJUSTES + 1 ACCIÓN] 🚧EN PROCESO🚧
   - AJUSTES: Indicar número de runa (1/16) y método de teletransporte (recall/gate)
   - ACCIONES: seleccionar libro de runas
@@ -18,9 +25,11 @@
     - Comprueba el cambio de posición para verificar el éxito
     - En caso de gate, es capaz de clicar el botón para atravesarlo
 
-✅ Obtener propiedades de objetos y personas [1 AJUSTE + 1 ACCIÓN] 🚧EN PROCESO🚧
-  - AJUSTES: Indicar datos a mostrar
-  - ACCIONES: seleccionar el objetivo de interés
-  - OBJETIVO: Conocer todas las propiedades posibles de nuestro objetivo (npc, objeto, player...)
-
-✅ Identificar NPCs y aproximarse 🚧EN PROCESO🚧
+✅ Hacer ronda [0 AJUSTES + 1 ACCIÓN]
+  - AJUSTES: -
+  - ACCIONES: seleccionar libro de runas
+  - OBJETIVO: Recorre las runas del libro teletransportándose de la 1 a la 16, o hasta donde el libro tenga runas
+    - Detecta cambios de posición bruscos
+    - Detecta la posible necesidad de mana
+    - Capaz de ver si el libro no está completo
+    - 🚧 METERLE que si valor de magia < 40 o maxmana < 11 buscar paladin y hacer otro tipo de recall
