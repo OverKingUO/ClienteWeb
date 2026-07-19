@@ -8,7 +8,8 @@ Colección organizada de macros para ClienteWeb, diseñadas para automatizar tar
 ├── ⚔️Entrenamiento
 ├── ⛏️Recoleccion
 ├── 🧪Elaboración
-└── 🛠️Utilidades
+├── 🛠️Utilidades
+└── 📡Funciones básicas
 ```
 
 ## 🎬 Tutoriales
