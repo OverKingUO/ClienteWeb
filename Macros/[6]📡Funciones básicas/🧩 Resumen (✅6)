@@ -1,16 +1,7 @@
- ✅ Mover objetos [2 AJUSTES + 3 ACCIONES]
-  - AJUSTES: (no imprescindibles) indicar filtro por color (S/N) y contemplación de variantes (S/N)
-  - ACCIONES: seleccionar contenedor origen, objeto deseado y contenedor destino
-  - OBJETIVO: Mueve objetos desde origen hasta destino
-    - Puedes pedirle que filtre por hue (o no) = moverá items iguales SOLO del mismo color
-    - Puedes pedirle que identifique otros graphics (o no) = tirará el item al suelo para ver si tiene otros graphics y moverlos también
-    - Calcula el peso real de cada item moviéndolo una vez a tu mochila
-    - Tiene en cuenta tanto el peso de ALMACENAMIENTO como el peso de ARRASTRE, calculado en base a la fuerza y el peso actual
-    - Tiene en cuenta si el destino es tu mochila, externo, o dentro de tu mochila hacia otro contenedor interno
-    - Si el servidor rechaza un movimiento, espera y reintenta automáticamente hasta 5 veces antes de detenerse
-    - Detecta si el destino está lleno (255 items) antes de cada movimiento
-    - Si un item cae al suelo durante el movimiento, lo localiza por serial y lo devuelve al origen
-    - Calcula el peso real de cada item moviéndolo una vez a tu mochila
 
-
-EDITAR
+✅ Detectar guardados automáticos 🚧EN PROCESO🚧
+✅ Alimentar al personaje 🚧EN PROCESO🚧
+✅ Comprobar nivel de habilidades
+✅ Usar libro de runas
+✅ Obtener propiedades de objetos y personas 🚧EN PROCESO🚧
+✅ Identificar NPCs y aproximarse 🚧EN PROCESO🚧
