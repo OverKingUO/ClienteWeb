@@ -4,10 +4,11 @@
 ✅ Alimentar al personaje 🚧EN PROCESO🚧
 
 ✅ Comprobar nivel de habilidades
-  - Consideredas TODAS las habilidades (58)
-  - Tiene en cuenta solo el nivel REAL
+  - OBJETIVO: Ver/Comprobar nivel real de habilidades para actuar en consecuencia
+    - Consideredas TODAS las habilidades (58)
+    - Tiene en cuenta solo el nivel REAL
 
-✅ Usar libro de runas
+✅ Usar libro de runas  [2 AJUSTES + 1 ACCIÓN]
   - AJUSTES: Indicar número de runa (1/16) y método de teletransporte (recall/gate)
   - ACCIONES: seleccionar libro de runas
   - OBJETIVO: Teletransporta al personaje
@@ -17,6 +18,9 @@
     - Comprueba el cambio de posición para verificar el éxito
     - En caso de gate, es capaz de clicar el botón para atravesarlo
 
-✅ Obtener propiedades de objetos y personas 🚧EN PROCESO🚧
+✅ Obtener propiedades de objetos y personas [1 AJUSTE + 1 ACCIÓN] 🚧EN PROCESO🚧
+  - AJUSTES: Indicar datos a mostrar
+  - ACCIONES: seleccionar el objetivo de interés
+  - OBJETIVO: Conocer todas las propiedades posibles de nuestro objetivo (npc, objeto, player...)
 
 ✅ Identificar NPCs y aproximarse 🚧EN PROCESO🚧
