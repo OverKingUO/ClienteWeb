@@ -8,11 +8,14 @@
   - Tiene en cuenta solo el nivel REAL
 
 ✅ Usar libro de runas
-  - Tiene en cuenta posición de botón de recall y de gate
-  - Tiene en cuenta habilidad y mana necesario según el modo
-  - Tiene en cuenta skill necesaria para recallear/gate y recuperar mana
-  - Comprueba el cambio de posición para verificar el éxito
-  - En caso de gate, es capaz de clicar el botón para atravesarlo
+  - AJUSTES: Indicar número de runa (1/16) y método de teletransporte (recall/gate)
+  - ACCIONES: seleccionar libro de runas
+  - OBJETIVO: Teletransporta al personaje
+    - Tiene en cuenta posición de botón de recall y de gate
+    - Tiene en cuenta habilidad y mana necesario según el modo
+    - Tiene en cuenta skill necesaria para recallear/gate y recuperar mana
+    - Comprueba el cambio de posición para verificar el éxito
+    - En caso de gate, es capaz de clicar el botón para atravesarlo
 
 ✅ Obtener propiedades de objetos y personas 🚧EN PROCESO🚧
 
