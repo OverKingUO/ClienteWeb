@@ -1,0 +1,165 @@
+// ============================================================
+// MACRO: Recall — recorrer todas las runas del libro
+// Versión: 2.0
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONSTANTES INTERNAS (NO MODIFICAR)
+// ============================================================
+
+const GUMP_RUNEBOOK       = 0x46A; // confirmado en juego
+const MANA_RECALL         = 11;
+const SKILL_MED_UMBRAL    = 50.0;
+const TIMEOUT_MANA_CASTEO = 3000;  // cuánto esperar a ver si el mana baja al pulsar
+const TIMEOUT_TELEPORT    = 15000; // cuánto esperar el salto de posición tras castear
+const SALTO_TELEPORT_MIN  = 150;   // un recall salta mucho más que esto; andar no
+
+function botonRecall(n: number): number { return 5 + (n - 1) * 6; }
+
+// Un recall produce un salto de posición GRANDE. Comparar contra este
+// umbral evita falsos positivos por moverse 1-2 tiles mientras se espera.
+function huboSaltoGrande(xAntes: number, yAntes: number): boolean {
+  const dx = Math.abs(player.x - xAntes);
+  const dy = Math.abs(player.y - yAntes);
+  return dx > SALTO_TELEPORT_MIN || dy > SALTO_TELEPORT_MIN;
+}
+
+
+// ============================================================
+// BLOQUE 2 — UTILIDADES
+// ============================================================
+
+function info(msg: string): void { client.sysMsg(`[RECALL] ${msg}`, 0x3B2); }
+function warn(msg: string): void { client.sysMsg(`[RECALL] ⚠ ${msg}`, 0x26); }
+
+
+// ============================================================
+// BLOQUE 3 — VALIDACIÓN
+// ============================================================
+
+const magSkill = player.getSkill(Skills.Magery);
+const magReal  = magSkill ? magSkill.base / 10 : 0;
+
+if (magReal < 40.0) {
+  warn(`Magery insuficiente. Tienes ${magReal.toFixed(1)}, necesitas 40.0.`);
+  exit();
+}
+
+
+// ============================================================
+// BLOQUE 4 — MEDITACIÓN
+// ============================================================
+// Se activa SOLO si el mana actual no llega para el próximo recall
+// (MANA_RECALL = 11). Si se activa, medita hasta el máximo (maxMana)
+// para no tener que volver a meditar en la runa siguiente.
+
+function meditar(): void {
+  if (player.mana >= MANA_RECALL) return;
+
+  const medSkill = player.getSkill(Skills.Meditation);
+  const medReal  = medSkill ? medSkill.base / 10 : 0;
+
+  if (medReal < SKILL_MED_UMBRAL) {
+    while (player.mana < MANA_RECALL) sleep(1000);
+    return;
+  }
+
+  while (player.mana < player.maxMana) {
+    journal.clear();
+    player.useSkill(Skills.Meditation);
+    const resp = journal.waitForTextAny(
+      ["entras en trance", "ya estas en un trance", "no puedes meditar", "you are already"],
+      undefined, 4000
+    );
+    if (resp && resp.includes("trance")) {
+      while (player.mana < player.maxMana) sleep(1000);
+    } else {
+      sleep(4000);
+    }
+  }
+}
+
+
+// ============================================================
+// BLOQUE 5 — SELECCIÓN DEL LIBRO DE RUNAS
+// ============================================================
+
+info("Haz clic en tu libro de runas...");
+const sel = target.query(false);
+if (!sel?.serial) { warn("Selección cancelada."); exit(); }
+const serialLibro = sel.serial;
+
+
+// ============================================================
+// BLOQUE 6 — RECORRER TODAS LAS RUNAS
+// ============================================================
+
+let runasHechas = 0;
+
+for (let runa = 1; runa <= 16; runa++) {
+
+  meditar();
+
+  if (player.mana < MANA_RECALL) {
+    warn(`Sin mana suficiente para recall (${player.mana}/${MANA_RECALL}). Macro detenida.`);
+    exit();
+  }
+
+  player.use(serialLibro);
+  const gump = Gump.findOrWait(GUMP_RUNEBOOK, 3000);
+  if (!gump) {
+    warn("No se abrió el libro de runas.");
+    exit();
+  }
+
+  const manaAntes = player.mana;
+  const xAntes = player.x;
+  const yAntes = player.y;
+
+  gump.reply(botonRecall(runa));
+
+  // ¿BAJÓ el mana? (no solo "cambió" — la regeneración pasiva puede subirlo
+  // 1 punto durante la espera y eso NO significa que se haya casteado nada).
+  // Si no baja, no había runa en esta posición — el hechizo nunca se
+  // casteó (Kal Ort Por no sale, no gasta mana), así que el libro
+  // termina aquí. No hace falta esperar un cambio de posición que
+  // nunca va a producirse.
+  const inicioMana = Date.now();
+  while (player.mana >= manaAntes && Date.now() - inicioMana < TIMEOUT_MANA_CASTEO) {
+    sleep(100);
+  }
+
+  if (player.mana >= manaAntes) {
+    try { gump.close(); } catch {}
+    info(`Runa ${runa}: sin runa — libro agotado. Total recorrido: ${runasHechas} runa/s.`);
+    break;
+  }
+
+  // Se casteó el hechizo — esperar el salto GRANDE de posición (teleport
+  // real, distinto de andar 2-3 tiles mientras se espera).
+  info(`Runa ${runa}: recall caseteado. Esperando el teleport...`);
+  const inicioTeleport = Date.now();
+  let teleportado = false;
+
+  while (Date.now() - inicioTeleport < TIMEOUT_TELEPORT) {
+    sleep(100);
+    if (huboSaltoGrande(xAntes, yAntes)) {
+      teleportado = true;
+      break;
+    }
+  }
+
+  if (teleportado) {
+    runasHechas++;
+    // Respetar el tiempo hasta que el efecto del hechizo anterior se
+    // asienta del todo antes de abrir el libro para el siguiente recall.
+    sleep(800);
+    player.say(".resend");
+    info(`Runa ${runa}: OK → (${player.x}, ${player.y})`);
+  } else {
+    warn(`Runa ${runa}: se gastó mana pero no hubo teleport. Continuando con la siguiente...`);
+  }
+}
+
+info(`Ruta terminada. Runas completadas: ${runasHechas}.`);
