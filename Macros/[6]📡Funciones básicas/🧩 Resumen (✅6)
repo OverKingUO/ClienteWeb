@@ -1,12 +1,13 @@
 
 ✅ Detectar guardados automáticos 🚧EN PROCESO🚧
+
 ✅ Alimentar al personaje 🚧EN PROCESO🚧
 
 ✅ Comprobar nivel de habilidades
-  - Consideredas TODAS las habilidades
+  - Consideredas TODAS las habilidades (58)
   - Tiene en cuenta solo el nivel REAL
 
-✅ **Usar libro de runas**
+✅ Usar libro de runas
   - Tiene en cuenta posición de botón de recall y de gate
   - Tiene en cuenta habilidad y mana necesario según el modo
   - Tiene en cuenta skill necesaria para recallear/gate y recuperar mana
@@ -14,4 +15,5 @@
   - En caso de gate, es capaz de clicar el botón para atravesarlo
 
 ✅ Obtener propiedades de objetos y personas 🚧EN PROCESO🚧
+
 ✅ Identificar NPCs y aproximarse 🚧EN PROCESO🚧
