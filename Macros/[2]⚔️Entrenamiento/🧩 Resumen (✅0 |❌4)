@@ -1,11 +1,21 @@
 
 ❌ Entrena a tu GUERRERO - 10 en 1
-Espada / Esgrima / Maza / Boxeo / Tácticas / Escudo / Curar (pegando)
-Arco (a golem)
-Caballería
-Anatomía
+
+AJUSTE 1: Anotar número referente a la habilidad que deseas 1-Espada / 2-Esgrima / 3-Maza / 4-Boxeo / 5-Anatomía / 6-Arco / 7-Caballería / 8-Curar
+AJUSTE 2: En el script deberás poner si o no (no por defecto) si deseas macrear escudo, solo se tendrá en cuenta si el ajuste 1 es 1-4
+AJUSTE 3: En el script deberás poner si o no (si por defecto) si deseas macrear tácticas, solo se tendrá en cuenta si el ajuste 1 es 1-4
+AJUSTE 4: En el script deberás poner si o no (si por defecto) si deseas macrear anatomía, solo se tendrá en cuenta si el ajuste 1 es 1-4
+AJUSTE 5: En el script deberás poner si o no (no por defecto) si deseas macrear curar, solo se tendrá en cuenta si el ajuste 1 es 1-4
+
+ACCIÓN 1 - (si ajuste 1 = 1-4) Deberás seleccionar la bolsa con armas/escudos de repuesto y a tu enemigo - SE PUEDE DIFERENCIAR SI ES JUGADOR QUE LE CURE Y SI ES NPC QUE SE CURE A EL MISMO??
+ACCIÓN 2 - (si ajuste 1 = 6) Deberás seleccionar el golem objetivo y el contenedor con flechas
+ACCIÓN 3 - (si ajuste 1 = 7) Deberás seleccionar el contenedor de los diezmos
+ACCIÓN 4 - (si ajuste 1 = 8) Deberás seleccionar el brasero que pisaremos
+
 
 ❌ Entrena a tu MAGO - 10 en 1
+AJUSTE 1: Anotar número referente a la habilidad que deseas 1-Magia / 2-Resistencia
+AJUSTE 2: En el script deberás poner si o no (ai por defecto) si deseas macrear eval, solo se tendrá en cuenta si el ajuste 1 es 1
 Curar (en brasero terathan si/no)
 Magia / Meditar / Resistencia
 Evaluar inteligencia
