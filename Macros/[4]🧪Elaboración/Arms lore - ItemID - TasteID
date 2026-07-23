@@ -1,0 +1,131 @@
+// ============================================================
+// MACRO: Entrenar habilidades de objeto
+// Versión: 1.0
+// Autor: Barack Segoviain
+//
+// ¿QUÉ HACE?
+//   Entrena en bucle la habilidad seleccionada usando un objeto
+//   fijo hasta llegar a 100.0 de skill REAL.
+//
+// HABILIDADES:
+//   1 — Conocimiento de Armas  (Arms Lore)
+//   2 — Identificar Objetos    (Item Identification)
+//   3 — Catar                  (Taste Identification)
+//
+// CONFIGURACIÓN:
+//   Pon el número de la habilidad y dale play.
+//   La macro pedirá que hagas clic en el objeto a usar.
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+
+//   1 — Conocimiento de Armas
+//   2 — Identificar Objetos
+//   3 — Catar
+const ENTRENAR = 1;
+
+
+// ============================================================
+// BLOQUE 2 — CONSTANTES INTERNAS (NO MODIFICAR)
+// ============================================================
+
+interface DefHabilidad {
+  nombre:  string;
+  skill:   Skills;
+  // Tiempo de cooldown de la skill en ms (tiempo mínimo entre usos)
+  cooldown: number;
+}
+
+const HABILIDADES: Record<number, DefHabilidad> = {
+  1: { nombre: "Conocimiento de Armas",  skill: Skills.ArmsLore, cooldown: 5000 },
+  2: { nombre: "Identificar Objetos",    skill: Skills.ItemID,   cooldown: 5000 },
+  3: { nombre: "Catar",                  skill: Skills.TasteID,  cooldown: 5000 },
+};
+
+const SKILL_MAX = 1000; // 100.0 * 10 — valor interno de skill al máximo
+
+
+// ============================================================
+// BLOQUE 3 — VALIDACIÓN
+// ============================================================
+
+function info(msg: string): void { client.sysMsg(`[ENTRENAR] ${msg}`, 0x3B2); }
+function warn(msg: string): void { client.sysMsg(`[ENTRENAR] ⚠ ${msg}`, 0x26); }
+
+if (!HABILIDADES[ENTRENAR]) {
+  warn(`ENTRENAR debe ser 1, 2 o 3. Valor actual: ${ENTRENAR}`);
+  exit();
+}
+
+const def = HABILIDADES[ENTRENAR];
+
+// Comprobar si ya está al máximo
+const skillActual = player.getSkill(def.skill);
+const skillReal   = skillActual ? skillActual.base : 0;
+
+if (skillReal >= SKILL_MAX) {
+  info(`${def.nombre} ya está al 100.0. Nada que entrenar.`);
+  exit();
+}
+
+info(`Entrenando: ${def.nombre} (${(skillReal / 10).toFixed(1)} / 100.0)`);
+
+
+// ============================================================
+// BLOQUE 4 — SELECCIÓN DEL OBJETO
+// ============================================================
+
+info("Haz clic en el objeto que quieres usar para entrenar...");
+const sel = target.query(false);
+if (!sel?.serial) { warn("Selección cancelada."); exit(); }
+
+const serialObjeto = sel.serial;
+info(`Objeto registrado (serial: 0x${serialObjeto.toString(16).toUpperCase()}).`);
+
+
+// ============================================================
+// BLOQUE 5 — BUCLE DE ENTRENAMIENTO
+// ============================================================
+
+info("Iniciando entrenamiento...");
+let usos = 0;
+
+while (true) {
+
+  // Comprobar skill REAL
+  const sk    = player.getSkill(def.skill);
+  const base  = sk ? sk.base : 0;
+
+  if (base >= SKILL_MAX) {
+    info(`¡${def.nombre} al 100.0! Macro detenida. Usos realizados: ${usos}`);
+    break;
+  }
+
+  // Verificar que el objeto sigue en la mochila
+  const objeto = client.findObject({ serial: serialObjeto }, null, player.backpack);
+  if (!objeto) {
+    warn("El objeto ya no está en la mochila. Macro detenida.");
+    break;
+  }
+
+  // Usar la skill
+  player.useSkill(def.skill);
+
+  // Esperar el cursor de objetivo
+  const cursorAbierto = target.wait(5000);
+  if (!cursorAbierto) {
+    // Sin cursor — puede estar en cooldown, esperar y reintentar
+    sleep(def.cooldown);
+    continue;
+  }
+
+  // Seleccionar el objeto
+  target.entity(objeto);
+  usos++;
+
+  // Esperar el cooldown antes del siguiente uso
+  sleep(def.cooldown);
+}
