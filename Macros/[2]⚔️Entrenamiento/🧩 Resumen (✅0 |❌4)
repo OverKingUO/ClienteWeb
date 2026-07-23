@@ -1,5 +1,5 @@
 
-❌ Entrena a tu GUERRERO - 10 en 1
+❌ Entrena a tu GUERRERO - 10 en 1  [5 AJUSTES + 4 ACCIONES]
 
 AJUSTE 1: Anotar número referente a la habilidad que deseas 1-Espada / 2-Esgrima / 3-Maza / 4-Boxeo / 5-Anatomía / 6-Arco / 7-Caballería / 8-Curar
 AJUSTE 2: En el script deberás poner si o no (no por defecto) si deseas macrear escudo, solo se tendrá en cuenta si el ajuste 1 es 1-4
@@ -12,18 +12,20 @@ ACCIÓN 2 - (si ajuste 1 = 6) Deberás seleccionar el golem objetivo y el conten
 ACCIÓN 3 - (si ajuste 1 = 7) Deberás seleccionar el contenedor de los diezmos
 ACCIÓN 4 - (si ajuste 1 = 8) Deberás seleccionar el brasero que pisaremos
 
+* Dependiendo de ajuste y acción la macro actuará en consecuencia, tendrá en cuenta que debe avisar cuando se alcance el nivel máximo y deseado
+de 100.0 de cada una de las habilidades ...
+
 
 ❌ Entrena a tu MAGO - 10 en 1
-AJUSTE 1: Anotar número referente a la habilidad que deseas 1-Magia / 2-Resistencia
-AJUSTE 2: En el script deberás poner si o no (ai por defecto) si deseas macrear eval, solo se tendrá en cuenta si el ajuste 1 es 1
-Curar (en brasero terathan si/no)
-Magia / Meditar / Resistencia
-Evaluar inteligencia
-Hablar con los espíritus
-Nigromancia
-Anatomía
-Concentración
-Envenenar
+AJUSTE 1: Anotar número referente a la habilidad que deseas 1-Magia / 2-Eval / 3-Resist / 4-Anatomy / 5-Curar / 6-Focus / 7-Nigro / 8-SS / 9-Poison
+AJUSTE 2: En el script deberás poner si o no (si por defecto) si deseas macrear eval, solo se tendrá en cuenta si el ajuste 1 es 1
+AJUSTE 3: En el script deberás poner si o no (si por defecto) si deseas macrear medit, solo se tendrá en cuenta si el ajuste 1 es 1
+
+ACCIÓN 1 - (si ajuste 1 = 1) Deberás seleccionar el contenedor con regs y a tu objetivo
+ACCIÓN 2 - (si ajuste 1 = 5) Deberás seleccionar el brasero (poly en terathan)
+ACCIÓN 3 - (si ajuste 1 = 6) Deberás situarte en punto a y b
+ACCIÓN 4 - (si ajuste 1 = 7) Deberás seleccionar el cofre con regs de nigro
+ACCIÓN 5 - (si ajuste 1 = 9) Deberás seleccionar el arma y el cofre con kegs y pociones 
 
 ❌ Entrena a tu BARDO - 10 en 1
 Domar
