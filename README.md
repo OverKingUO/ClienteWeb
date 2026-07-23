@@ -28,5 +28,5 @@ Este proyecto se distribuye bajo licencia MIT. Puedes usar, modificar y comparti
 
 ## 📊 Progreso del proyecto
 
-**Macros: 16/36 (44%)**
-███████████████░░░░░░░░░░░░░░░░░░░░
+**Macros: 17/34 (50%)**
+█████████████████░░░░░░░░░░░░░░░░░
