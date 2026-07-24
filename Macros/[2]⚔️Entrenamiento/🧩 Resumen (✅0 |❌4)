@@ -7,13 +7,27 @@ AJUSTE 3: En el script deberás poner si o no (si por defecto) si deseas macrear
 AJUSTE 4: En el script deberás poner si o no (si por defecto) si deseas macrear anatomía, solo se tendrá en cuenta si el ajuste 1 es 1-4
 AJUSTE 5: En el script deberás poner si o no (no por defecto) si deseas macrear curar, solo se tendrá en cuenta si el ajuste 1 es 1-4
 
-ACCIÓN 1 - (si ajuste 1 = 1-4) Deberás seleccionar la bolsa con armas/escudos de repuesto y a tu enemigo - SE PUEDE DIFERENCIAR SI ES JUGADOR QUE LE CURE Y SI ES NPC QUE SE CURE A EL MISMO??
+ACCIÓN 1 - (si ajuste 1 = 1-4) Deberás seleccionar la bolsa con armas/escudos de repuesto, a tu enemigo y a quien vas a curar
 ACCIÓN 2 - (si ajuste 1 = 6) Deberás seleccionar el golem objetivo y el contenedor con flechas
 ACCIÓN 3 - (si ajuste 1 = 7) Deberás seleccionar el contenedor de los diezmos
 ACCIÓN 4 - (si ajuste 1 = 8) Deberás seleccionar el brasero que pisaremos
 
 * Dependiendo de ajuste y acción la macro actuará en consecuencia, tendrá en cuenta que debe avisar cuando se alcance el nivel máximo y deseado
-de 100.0 de cada una de las habilidades ...
+de 100.0 de cada una de las habilidades, también deberá controlar la aparición de world saves y mantenerse alimentado si existe comida a su alcance
+1-4: Pegarás a tu objetivo mientras curarás constantemente - Si te curas a ti mismo y la vida baja de 30, te alejarás del enemigo por seguridad 
+hasta recuperar toda la vida y volver al ataque. Si curas al enemigo, dejarás de pegar si le baja la vida de 30, y volverás a pegarle cuando la recupere
+5: uso de habilidad anatomía sobre uno mismo
+6: coge la cantidad de flechas que pueda albergar por el peso disponible del cofre y se las lanza al golem. Al quedarse sin se acerca al golem, usa el 
+comando de voz "nombredelgolem" drop, coge las flechas del suelo, vuelve a la zona de tiro, repone más flechas y continúa lanzando
+7: Usará el comando .caballeria01 cuando tenga skill > 10.0, .caballeria02 con 20.0 de skill, if #SKILL >= 400 .caballeria04, 
+if #SKILL >= 600 .caballeria06 (con target sobre el arma), if #SKILL >= 700 .caballeria07, if #SKILL >= 900 .caballeria09. e irá reponiendo los diezmos 
+que pueda graphic 0xEED hue 0x7A1. La habilidad debería aumentar con cada casteo, si no lo hace, es que no hemos esperado lo suficiente para repetirlo.
+Cada vez que repitas el mismo casteo, el tiempo aumenta +10 segundos sobre el anterior hasta dar con el tiempo necesario para subir +0.1 y de ahí
+partirá para calcular el siguiente (quiero que me registres los segundos que tarda en subir en un .txt)
+8: Caminará sobre un brasero para perder unos 10 de vida, en cuanto le baje de 100 ya se echará el vendazo, después caminará fuera del brasero,
+esperará a recuperar su vida con el vendazo y volverá a pisar el brasero, así hasta que llegue a 100.0 de curar REALES y se quede fuera del brasero
+deteniendo la macro
+
 
 
 ❌ Entrena a tu MAGO - 10 en 1
