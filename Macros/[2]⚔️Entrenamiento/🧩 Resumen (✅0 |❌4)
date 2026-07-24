@@ -1,5 +1,5 @@
 
-❌ Entrena a tu GUERRERO - 10 en 1  [5 AJUSTES + 4 ACCIONES]
+❌ Entrena a tu GUERRERO - 10 en 1  [5 AJUSTES + 1-3 ACCIONES]
 
 AJUSTE 1: Anotar número referente a la habilidad que deseas 1-Espada / 2-Esgrima / 3-Maza / 4-Boxeo / 5-Anatomía / 6-Arco / 7-Caballería / 8-Curar
 AJUSTE 2: En el script deberás poner si o no (no por defecto) si deseas macrear escudo, solo se tendrá en cuenta si el ajuste 1 es 1-4
@@ -27,6 +27,12 @@ partirá para calcular el siguiente (quiero que me registres los segundos que ta
 8: Caminará sobre un brasero para perder unos 10 de vida, en cuanto le baje de 100 ya se echará el vendazo, después caminará fuera del brasero,
 esperará a recuperar su vida con el vendazo y volverá a pisar el brasero, así hasta que llegue a 100.0 de curar REALES y se quede fuera del brasero
 deteniendo la macro
+
+** 5 bien
+** 1-4 se curará aunque ponga curar no, los si/no solo son para monitorizar el nivel de skill y, en caso de escudo, reponer (buscar en misma bosla los ids)
+** 6 - que busque arco tambien en la bolsa, no ataca al golem, que reinicie ataque si System: No debes de atacar a tus mascotas!.
+** 7 - Solo coge 10 diezmos y no castea nada
+** 8 - Falla al caminar hacia el brasero, tampoco se aplica las vendas, System: There is no such skill. Please tell support you saw this message.
 
 
 
