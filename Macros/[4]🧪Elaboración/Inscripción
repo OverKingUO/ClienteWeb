@@ -13,7 +13,7 @@ const MODO_MACREO: 'SI' | 'NO' = 'NO';
 // MODO_MACREO: SI → se detiene al llegar a 100.0 (recomendado: pergamino 5)
 
 //
-const PERGAMINO   = 42;
+const PERGAMINO   = 10;
 // PERGAMINO: número del pergamino a fabricar (elegir de la lista 1–64).
 //      1er Círculo       ||      2º Círculo       ||      3er Círculo      ||      4º Círculo       
 // 1 - Torpeza	          ||  9 - Agilidad         || 17 - Bendición        || 25 - Sanar masivo
@@ -184,12 +184,12 @@ const CFG = {
   GUMP_ESCRIBA:       0x463,   
   BTN_FABRICAR:       508,     
 
-  HERRAMIENTA_GRAPHIC: 0x0FBF,
-  HERRAMIENTA_HUE:     0x0000,
+  HERRAMIENTA_GRAPHIC: 0xFBF,
+  HERRAMIENTA_HUE:     0x0,
   HERRAMIENTA_PESO:    2.0,
 
-  PERGAMINO_GRAPHIC:   0x0E34,
-  PERGAMINO_HUE:       0x0000,
+  PERGAMINO_GRAPHIC:   0xE34,
+  PERGAMINO_HUE:       0x0,
   PERGAMINO_PESO:      1.0,
 
   HERRAMIENTAS_EN_MOCHILA: 2,   
@@ -201,11 +201,12 @@ const CFG = {
 };
 
 const JOURNAL = {
-  EXITO:        ["colocas", "creas", "fabricas", "fabricado", "escribes", "terminas", "inscribes"],
-  SIN_SKILL:    ["no tienes la habilidad", "no eres lo suficientemente", "habilidad necesaria"],
+  EXITO: ["Pones", "colocas", "creas", "fabricas", "fabricado", "escribes", "terminas", "inscribes"],
+  SIN_SKILL: ["no tienes la habilidad", "no eres lo suficientemente", "habilidad necesaria"],
   ERROR_CRAFT:  ["fallas", "no has podido", "no puedes"],
   SIN_MATERIAL: ["no tienes suficientes", "no tienes los materiales", "no tienes pergaminos"],
 };
+
 const TODOS_MSGS = [
   ...JOURNAL.EXITO,
   ...JOURNAL.SIN_SKILL,
@@ -531,6 +532,7 @@ function navegarAFabricacion(): boolean {
 }
 
 
+// ============================================================
 // BLOQUE 12 — BUCLE DE FABRICACIÓN
 // ============================================================
 
@@ -543,7 +545,6 @@ let fabricados = 0;
 
 while (true) {
 
-  // ── Skill cap (modo macreo) ──
   if (MODO_MACREO === 'SI') {
     const sk = player.getSkill(Skills.Inscribe);
     if (sk && sk.value / 10 >= 100.0) {
@@ -551,60 +552,52 @@ while (true) {
     }
   }
 
-  // ── Mana ──
   meditar();
 
-  // ── Materiales ──
   if (!reponerHerramienta()) break;
   if (!reponerPergaminos())  break;
   if (!reponerReactivos())   break;
 
-  // ── Gump disponible ──
   if (!gumpNavegado || !gumpNavegado.exists) {
     info("Menú perdido. Volviendo a navegar...");
     if (!navegarAFabricacion()) break;
   }
 
-  // ── Fabricar ──
-  journal.clear();
   checkWorldSave();
+
+  const blancosAntes = contarEnContenedor(player.backpack!.serial, CFG.PERGAMINO_GRAPHIC, CFG.PERGAMINO_HUE);
+
   gumpNavegado!.reply(CFG.BTN_FABRICAR);
 
-  const resp = journal.waitForTextAny(TODOS_MSGS, undefined, CFG.TIMEOUT_CRAFT);
+  const finEspera = Date.now() + CFG.TIMEOUT_CRAFT;
+  let fabricadoOk = false;
 
-  if (!resp) { sleep(1000); continue; }
+  while (Date.now() < finEspera) {
+    sleep(300);
+    const resultado = client.findType(def.graphicResultado, null, player.backpack, null, 0);
+    if (resultado) { fabricadoOk = true; break; }
+  }
 
-  const respLower = resp.toLowerCase();
+  if (fabricadoOk) {
+    fabricados++;
+    info(`Fabricado: ${def.nombre} (total: ${fabricados})`);
+    moverResultadoADestino();
 
-  if (JOURNAL.SIN_MATERIAL.some(m => respLower.includes(m))) {
-    info("Sin materiales. Reponiendo...");
+    sleep(CFG.SLEEP_NAV);
+    const gumpTras = Gump.last;
+    gumpNavegado = (gumpTras && gumpTras.exists) ? gumpTras : null;
     continue;
   }
 
-  if (JOURNAL.SIN_SKILL.some(m => respLower.includes(m))) {
-    info("Skill insuficiente para este pergamino.");
-    break;
-  }
+  const blancosDespues = contarEnContenedor(player.backpack!.serial, CFG.PERGAMINO_GRAPHIC, CFG.PERGAMINO_HUE);
 
-  if (JOURNAL.ERROR_CRAFT.some(m => respLower.includes(m))) {
-    sleep(500); continue;
-  }
-
-  // ── Éxito ──
-  fabricados++;
-
-  // Mover pergamino fabricado al destino
-  moverResultadoADestino();
-
-  // Tras fabricar el gump reaparece en la pantalla de fabricación.
-  // Actualizarlo para la siguiente iteración.
-  sleep(CFG.SLEEP_NAV);
-  const gumpTras = Gump.last;
-  if (gumpTras && gumpTras.exists) {
-    gumpNavegado = gumpTras;
+  if (blancosDespues < blancosAntes) {
+    info("Craft fallido (se consumió el pergamino, sin resultado). Reintentando...");
   } else {
-    gumpNavegado = null; // forzar renavegación en la próxima iteración
+    info("Sin respuesta del menú. Forzando renavegación...");
+    gumpNavegado = null;
   }
+  sleep(500);
 }
 
 info(`Finalizado. Pergaminos fabricados: ${fabricados}.`);
