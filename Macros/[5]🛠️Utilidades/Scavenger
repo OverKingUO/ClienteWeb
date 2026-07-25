@@ -1,0 +1,113 @@
+// ============================================================
+// MACRO: Scavenger — Recolección automática del suelo
+// Versión: 2.2
+// Autor: Over
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+
+let GRAPHICS_A_RECOGER: number[] = [
+  0x0EED, // oro
+  0x1078, // pieles
+];
+
+const SERIAL_DESTINO = 0;
+const RANGO_ALCANCE = 2;
+
+// Comando de chat para añadir un item a la lista en caliente.
+const COMANDO_AGREGAR = ".add";
+
+
+// ============================================================
+// BLOQUE 2 — AJUSTES INTERNOS
+// ============================================================
+
+const SLEEP_ESCANEO = 700;
+const SLEEP_RECOGER = 500;
+
+
+// ============================================================
+// BLOQUE 3 — UTILIDADES
+// ============================================================
+
+function info(msg: string): void { client.sysMsg(`[SCAVENGER] ${msg}`, 0x3B2); }
+function warn(msg: string): void { client.sysMsg(`[SCAVENGER] ⚠ ${msg}`, 0x26); }
+
+function estaEnSuelo(item: Item): boolean {
+  return (item as any).container === -1;
+}
+
+
+// ============================================================
+// BLOQUE 4 — SELECCIÓN DE DESTINO
+// ============================================================
+
+let serialDestino = SERIAL_DESTINO;
+
+if (serialDestino === 0) {
+  info("Haz clic en el contenedor DESTINO...");
+  const sel = target.query(false);
+  if (!sel?.serial) { warn("Selección cancelada. Macro detenida."); exit(); }
+  serialDestino = sel.serial;
+  player.use(serialDestino);
+  sleep(1000);
+  info(`Destino registrado: 0x${serialDestino.toString(16).toUpperCase()}`);
+} else {
+  player.use(serialDestino);
+  sleep(1000);
+}
+
+
+// ============================================================
+// BLOQUE 5 — AÑADIR GRAPHICS EN CALIENTE (vía comando de chat)
+// ============================================================
+
+function comprobarComandoAgregar(): void {
+  if (!journal.containsText(COMANDO_AGREGAR)) return;
+
+  // ⚠ DIAGNÓSTICO TEMPORAL — si esto salta solo (falso positivo),
+  // aquí verás EXACTAMENTE qué mensaje del journal lo disparó.
+  // Cópiamelo y quito este log en la versión final.
+  log(`[SCAVENGER][DEBUG] Journal completo al disparar ".add": ${JSON.stringify(journal)}`);
+
+  journal.clear();
+
+  info("Comando detectado. Haz clic en el item a añadir...");
+  const sel = target.query(false);
+  if (!sel?.graphic) { warn("Selección cancelada o sin graphic válido."); return; }
+
+  if (GRAPHICS_A_RECOGER.includes(sel.graphic)) {
+    info(`0x${sel.graphic.toString(16).toUpperCase()} ya estaba en la lista.`);
+    return;
+  }
+
+  GRAPHICS_A_RECOGER.push(sel.graphic);
+  info(`Añadido: 0x${sel.graphic.toString(16).toUpperCase()}. Total: ${GRAPHICS_A_RECOGER.length}.`);
+}
+
+
+// ============================================================
+// BLOQUE 6 — BUCLE PRINCIPAL (INFINITO)
+// ============================================================
+
+info(`Iniciando scavenger. Vigilando ${GRAPHICS_A_RECOGER.length} graphic/s, radio ${RANGO_ALCANCE}.`);
+info(`Escribe "${COMANDO_AGREGAR}" en el chat para añadir un item nuevo en caliente.`);
+
+while (true) {
+
+  comprobarComandoAgregar();
+
+  for (const graphic of GRAPHICS_A_RECOGER) {
+    const encontrado = client.findType(graphic, null, null, null, RANGO_ALCANCE) as Item | null;
+    if (!encontrado) continue;
+    if (!estaEnSuelo(encontrado)) continue;
+
+    player.moveItem(encontrado, { serial: serialDestino }, 0, 0, 0, encontrado.amount);
+    sleep(SLEEP_RECOGER);
+  }
+
+  sleep(SLEEP_ESCANEO);
+}
