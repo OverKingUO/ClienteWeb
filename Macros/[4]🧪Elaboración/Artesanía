@@ -27,7 +27,7 @@
 //   13 - Cuentas                         
 //   14 - Adorno para varitas (cargas) 
 
-const HERRAMIENTA_A_FABRICAR = 11;
+const HERRAMIENTA_A_FABRICAR = 13;
 
 // ¿Quieres subir la habilidad de Tinkering?
 // Se recomienda usar la opción 9 (Ganzúa) o 10 (Engranajes) para macroear.
@@ -282,7 +282,7 @@ const HERRAMIENTAS: Record<number, DefHerramienta> = {
 
 const CFG = {
   HERRAMIENTA:             HERRAMIENTA_A_FABRICAR,
-  GUMP_TINKERING:          0x460,
+  GUMP_TINKERING:          0x463,
   BTN_FABRICAR_ULTIMO:     508,
   BTN_SIGUIENTE:           404,
   HERRAMIENTAS_EN_MOCHILA: 2,
