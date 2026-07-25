@@ -1,0 +1,452 @@
+// ============================================================
+// MACRO: Recoger arena — Ultima Alianza
+// Versión: 2.0
+// Autor: Over
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+
+const CFG = {
+
+  // Seriales (0 = la macro te pedirá clic al iniciar)
+  SERIAL_LIBRO_MINA:  0,
+  SERIAL_LIBRO_CASA:  0,
+
+  // Posición de cada runa en su libro (1–16)
+  RUNA_MINA:          1,
+  RUNA_CASA:          1,
+
+  // Peso máximo antes de volver a casa
+  PESO_VOLVER:        350,
+
+  // Reactivos de recall a mantener en mochila (5 de cada uno)
+  REGS_CANTIDAD:      5,
+
+  // Mana mínimo para recall
+  MANA_RECALL:        11,
+
+  // Tiempos (ms)
+  SLEEP_ACCION:       600,
+  SLEEP_GUMP:         2000,
+  RECALL_TIMEOUT:     20000,
+  SLEEP_ESPERA_MINA:  1500,
+};
+
+
+// ============================================================
+// BLOQUE 2 — CONSTANTES (NO MODIFICAR)
+// ============================================================
+
+const GUMP_RUNEBOOK       = 0x46A;
+
+const PICO_PLATA_GRAPHIC  = 0xE85;
+const PICO_PLATA_HUE      = 0x0482;
+const PALA_GRAPHIC        = 0x0F3A;
+const PALA_HUE            = 0x0355;
+
+const ARENA_GRAPHIC       = 0x19B9;
+const ARENA_HUE           = 0x0229;
+const CANGREJO_GRAPHIC    = 0x58A5;
+const CANGREJO_HUE        = 0x0000;
+const SAL_GRAPHIC         = 0x0F91;
+const SAL_HUE             = 0x0481;
+
+// Gemas (todas van a la caja junto a arena y sal)
+const GEMAS_GRAPHICS = [
+  0xF13, 0xF14, 0xF2B, 0xF2A, 0xF1C, 0xF1D, 0xF1A, // rubí
+  0xF18, 0xF1E, 0xF2D, 0xF20,                         // turmalina
+  0xF28, 0xF27, 0xF30, 0xF26,                         // diamante
+  0xF16, 0xF2E, 0xF22, 0xF17,                         // amatista
+  0xF1F, 0xF0F, 0xF21, 0xF11, 0xF1B,                 // zafiro
+  0xF10, 0xF2F,                                        // esmeralda
+  0xF15, 0xF24, 0xF23, 0xF2C,                         // citrine
+  0xF25,                                               // ámbar
+];
+
+// Reactivos de recall
+const BPEARL_GRAPHIC      = 0x0F7A;
+const MANDRAKE_GRAPHIC    = 0x0F86;
+const BLOODMOSS_GRAPHIC   = 0x0F7B;
+
+const JOURNAL = {
+  EXITO:   ["Pones el arena", "Pones el Cangrejo", "Pones el Sales",
+            "Pones el amatista", "Pones el zafiro", "Pones el turmalina",
+            "Pones el rubi", "Pones el diamante", "Pones el esmeralda",
+            "Pones el citrine", "Pones el ambar"],
+  ESPERAR: ["Debes esperar para poder realizar otra accion"],
+  SIN_MAT: ["no hay nada aqui", "no encuentras nada"],
+};
+const TODOS_MSGS = [
+  ...JOURNAL.EXITO, ...JOURNAL.ESPERAR, ...JOURNAL.SIN_MAT,
+];
+
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN    = "Comienza la grabacion de las bases de datos";
+
+function botonRecall(n: number): number { return 5 + (n - 1) * 6; }
+
+
+// ============================================================
+// BLOQUE 3 — UTILIDADES
+// ============================================================
+
+function info(msg: string): void { client.sysMsg(`[ARENA] ${msg}`, 0x3B2); }
+function warn(msg: string): void { client.sysMsg(`[ARENA] ⚠ ${msg}`, 0x26); }
+
+function checkWorldSave(): void {
+  const hayAviso  = journal.containsText(WS_AVISO);
+  const hayInicio = journal.containsText(WS_INICIO);
+  if (!hayAviso && !hayInicio) return;
+  journal.clear();
+  if (hayAviso) {
+    info("Save en 1 min. Pausando...");
+    journal.waitForText(WS_INICIO, undefined, 90000);
+    journal.clear();
+    journal.waitForText(WS_FIN, undefined, 180000);
+    journal.clear();
+  } else {
+    info("Save en curso. Esperando...");
+    journal.waitForText(WS_FIN, undefined, 180000);
+    journal.clear();
+  }
+  info("Save terminado. Continuando.");
+  sleep(3000);
+}
+
+function meditar(): void {
+  if (player.mana >= CFG.MANA_RECALL) return;
+  info(`Mana bajo (${player.mana}). Meditando hasta ${CFG.MANA_RECALL}...`);
+  while (player.mana < CFG.MANA_RECALL) {
+    journal.clear();
+    player.useSkill(Skills.Meditation);
+    const resp = journal.waitForTextAny(
+      ["entras en trance", "ya estas en un trance", "no puedes meditar"],
+      undefined, 4000
+    );
+    if (resp && resp.includes("trance")) {
+      while (player.mana < CFG.MANA_RECALL) sleep(500);
+    } else {
+      sleep(3000);
+    }
+  }
+}
+
+function esperarRecall(xAntes: number, yAntes: number): void {
+  const inicio = Date.now();
+  while (Date.now() - inicio < CFG.RECALL_TIMEOUT) {
+    sleep(100);
+    if (Math.abs(player.x - xAntes) > 150 || Math.abs(player.y - yAntes) > 150) {
+      info(`Recall OK → (${player.x}, ${player.y})`);
+      return;
+    }
+  }
+  warn("Timeout en recall.");
+}
+
+function contarEnContenedor(serial: number, graphic: number, hue: number): number {
+  const items = client.findAllItemsOfType(graphic, null, { serial }, null, 0) as Item[];
+  let total = 0;
+  for (const it of items) { if (it.hue === hue) total += it.amount; }
+  return total;
+}
+
+function contarEnMochila(graphic: number): number {
+  const items = client.findAllItemsOfType(graphic, null, player.backpack, null, 0) as Item[];
+  let total = 0;
+  for (const it of items) total += it.amount;
+  return total;
+}
+
+
+// ============================================================
+// BLOQUE 4 — SETUP INICIAL
+// ============================================================
+
+let serialLibroMina  = CFG.SERIAL_LIBRO_MINA;
+let serialLibroCasa  = CFG.SERIAL_LIBRO_CASA;
+let serialContenedor = 0;  // contenedor principal (donde dejar arena)
+let serialCajaArena  = 0;  // caja dentro del contenedor (también tiene los regs)
+let serialBolsaExtras = 0; // bolsa dentro de la caja para cangrejos y sal
+
+function setup(): void {
+  info("=== SETUP ===");
+  sleep(500);
+
+  if (serialLibroMina === 0) {
+    info("1/5 — Haz clic en el LIBRO DE RUNAS DE LA MINA...");
+    const t = target.query(false);
+    if (!t?.serial) { warn("Cancelado."); exit(); }
+    serialLibroMina = t.serial;
+    info(`Libro mina: 0x${serialLibroMina.toString(16).toUpperCase()}`);
+    sleep(400);
+  }
+
+  if (serialLibroCasa === 0) {
+    info("2/5 — Haz clic en el LIBRO DE RUNAS DE CASA...");
+    const t = target.query(false);
+    if (!t?.serial) { warn("Cancelado."); exit(); }
+    serialLibroCasa = t.serial;
+    info(`Libro casa: 0x${serialLibroCasa.toString(16).toUpperCase()}`);
+    sleep(400);
+  }
+
+  info("3/5 — Haz clic en el CONTENEDOR PRINCIPAL donde dejar la arena...");
+  {
+    const t = target.query(false);
+    if (!t?.serial) { warn("Cancelado."); exit(); }
+    serialContenedor = t.serial;
+    player.use(serialContenedor);
+    sleep(CFG.SLEEP_GUMP);
+    info(`Contenedor principal: 0x${serialContenedor.toString(16).toUpperCase()}`);
+  }
+
+  info("4/5 — Haz clic en la CAJA dentro del contenedor (tiene los regs y donde va la arena)...");
+  {
+    const t = target.query(false);
+    if (!t?.serial) { warn("Cancelado."); exit(); }
+    serialCajaArena = t.serial;
+    player.use(serialCajaArena);
+    sleep(CFG.SLEEP_GUMP);
+    info(`Caja arena/regs: 0x${serialCajaArena.toString(16).toUpperCase()}`);
+  }
+
+  info("5/5 — Haz clic en la BOLSA dentro de la caja (para cangrejos y sal)...");
+  {
+    const t = target.query(false);
+    if (!t?.serial) { warn("Cancelado."); exit(); }
+    serialBolsaExtras = t.serial;
+    info(`Bolsa cangrejos/sal: 0x${serialBolsaExtras.toString(16).toUpperCase()}`);
+  }
+
+  info("Setup completo.");
+  sleep(500);
+}
+
+
+// ============================================================
+// BLOQUE 5 — VALIDACIONES
+// ============================================================
+
+function validarPicoEquipado(): void {
+  const oh = player.equippedItems.oneHanded as Item | undefined;
+  const th = player.equippedItems.twoHanded as Item | undefined;
+  const ok = [oh, th].some(i => i?.graphic === PICO_PLATA_GRAPHIC && i?.hue === PICO_PLATA_HUE);
+  if (!ok) {
+    warn("El pico de plata (0xE85, hue 0x482) no está equipado. Equípalo y relanza.");
+    exit();
+  }
+}
+
+function obtenerPala(): Item {
+  const items = client.findAllItemsOfType(PALA_GRAPHIC, null, player.backpack, null, 0) as Item[];
+  const pala = items.find(i => i.hue === PALA_HUE);
+  if (!pala) { warn("No hay pala (0xF3A, hue 0x355) en la mochila."); exit(); }
+  return pala!;
+}
+
+
+// ============================================================
+// BLOQUE 6 — RECALLS
+// ============================================================
+
+function recallMina(): void {
+  checkWorldSave(); meditar();
+  info(`Recall a la mina...`);
+  const xAntes = player.x; const yAntes = player.y;
+  player.use(serialLibroMina);
+  const gump = Gump.findOrWait(GUMP_RUNEBOOK, 3000);
+  if (!gump) { warn("No se abrió el libro de mina."); return; }
+  sleep(500);
+  gump.reply(botonRecall(CFG.RUNA_MINA));
+  esperarRecall(xAntes, yAntes);
+}
+
+function recallCasa(): void {
+  checkWorldSave(); meditar();
+  info(`Recall a casa...`);
+  const xAntes = player.x; const yAntes = player.y;
+  player.use(serialLibroCasa);
+  const gump = Gump.findOrWait(GUMP_RUNEBOOK, 3000);
+  if (!gump) { warn("No se abrió el libro de casa."); return; }
+  sleep(500);
+  gump.reply(botonRecall(CFG.RUNA_CASA));
+  esperarRecall(xAntes, yAntes);
+}
+
+
+// ============================================================
+// BLOQUE 7 — DESCARGA Y REPOSICIÓN DE REGS
+// ============================================================
+
+function descargarEnCasa(): void {
+  info("Descargando...");
+
+  // Arena, sal y gemas → caja de arena
+  const aCaja = [
+    { graphic: ARENA_GRAPHIC, hue: ARENA_HUE, nombre: "Arena" },
+    { graphic: SAL_GRAPHIC,   hue: SAL_HUE,   nombre: "Sal"   },
+  ];
+  for (const e of aCaja) {
+    const items = client.findAllItemsOfType(e.graphic, null, player.backpack, null, 0) as Item[];
+    for (const it of items) {
+      if (it.hue !== e.hue) continue;
+      player.moveItem(it, { serial: serialCajaArena }, 0, 0, 0, it.amount);
+      sleep(CFG.SLEEP_ACCION);
+    }
+  }
+
+  // Gemas → caja de arena (sin filtro de hue, cualquier graphic de la lista)
+  for (const g of GEMAS_GRAPHICS) {
+    const items = client.findAllItemsOfType(g, null, player.backpack, null, 0) as Item[];
+    for (const it of items) {
+      player.moveItem(it, { serial: serialCajaArena }, 0, 0, 0, it.amount);
+      sleep(CFG.SLEEP_ACCION);
+    }
+  }
+
+  // Cangrejos → bolsa de extras
+  const items = client.findAllItemsOfType(CANGREJO_GRAPHIC, null, player.backpack, null, 0) as Item[];
+  for (const it of items) {
+    if (it.hue !== CANGREJO_HUE) continue;
+    player.moveItem(it, { serial: serialBolsaExtras }, 0, 0, 0, it.amount);
+    sleep(CFG.SLEEP_ACCION);
+  }
+
+  info("Descarga completada.");
+}
+
+function reponerRegs(): void {
+  info("Reponiendo regs...");
+
+  // Abrir la caja para que el cliente cargue su contenido
+  player.use(serialCajaArena);
+  sleep(CFG.SLEEP_GUMP);
+
+  const regs = [
+    { graphic: BPEARL_GRAPHIC,    nombre: "Black Pearl"   },
+    { graphic: MANDRAKE_GRAPHIC,  nombre: "Mandrake Root" },
+    { graphic: BLOODMOSS_GRAPHIC, nombre: "Blood Moss"    },
+  ];
+
+  for (const reg of regs) {
+    const enMochila = contarEnMochila(reg.graphic);
+    const faltan = CFG.REGS_CANTIDAD - enMochila;
+    if (faltan <= 0) continue;
+    const items = client.findAllItemsOfType(reg.graphic, null, { serial: serialCajaArena }, null, 0) as Item[];
+    const src = items[0];
+    if (!src) { warn(`Sin ${reg.nombre} en la caja.`); continue; }
+    const aMover = Math.min(faltan, src.amount);
+    player.moveItem(src, player.backpack!, 0, 0, 0, aMover);
+    sleep(CFG.SLEEP_ACCION);
+    info(`${reg.nombre}: ${enMochila + aMover}/${CFG.REGS_CANTIDAD}`);
+  }
+
+  const g = Gump.last; if (g) g.close();
+  sleep(300);
+}
+
+
+// ============================================================
+// BLOQUE 8 — MINAR
+// ============================================================
+
+function minarTile(): 'exito' | 'esperar' | 'vacio' | 'error' {
+  const pala = obtenerPala();
+
+  // Tile frente al jugador
+  let dx = 0, dy = 0;
+  switch (player.direction) {
+    case Directions.North: dy = -1; break;
+    case Directions.South: dy =  1; break;
+    case Directions.East:  dx =  1; break;
+    case Directions.West:  dx = -1; break;
+    case Directions.Right: dx =  1; dy = -1; break;
+    case Directions.Down:  dx =  1; dy =  1; break;
+    case Directions.Left:  dx = -1; dy =  1; break;
+    case Directions.Up:    dx = -1; dy = -1; break;
+  }
+
+  journal.clear();
+  player.use(pala);
+  const hasTarget = target.wait(3000);
+  if (!hasTarget) return 'error';
+  target.terrain(player.x + dx, player.y + dy, player.z, 0);
+
+  const resp = journal.waitForTextAny(TODOS_MSGS, undefined, 8000);
+  if (!resp) return 'error';
+  if (JOURNAL.EXITO.some(m => resp.includes(m)))   return 'exito';
+  if (JOURNAL.ESPERAR.some(m => resp.includes(m))) return 'esperar';
+  if (JOURNAL.SIN_MAT.some(m => resp.includes(m))) return 'vacio';
+  return 'error';
+}
+
+
+// ============================================================
+// BLOQUE 9 — INICIO
+// ============================================================
+
+setup();
+validarPicoEquipado();
+
+// Descargar lo que se lleve encima y reponer regs antes de salir
+descargarEnCasa();
+reponerRegs();
+
+recallMina();
+
+info("Iniciando minería de arena...");
+let extracciones = 0;
+
+
+// ============================================================
+// BLOQUE 10 — BUCLE PRINCIPAL
+// ============================================================
+
+while (true) {
+
+  checkWorldSave();
+
+  // Comprobar peso
+  if (player.weight >= CFG.PESO_VOLVER) {
+    info(`Peso alcanzado (${player.weight}/${player.weightMax}). Volviendo a casa...`);
+    recallCasa();
+    descargarEnCasa();
+    reponerRegs();
+    recallMina();
+    continue;
+  }
+
+  // Comprobar pico
+  const oh = player.equippedItems.oneHanded as Item | undefined;
+  const th = player.equippedItems.twoHanded as Item | undefined;
+  if (![oh, th].some(i => i?.graphic === PICO_PLATA_GRAPHIC && i?.hue === PICO_PLATA_HUE)) {
+    warn("El pico de plata se ha desequipado. Macro detenida.");
+    break;
+  }
+
+  const resultado = minarTile();
+
+  switch (resultado) {
+    case 'exito':
+      extracciones++;
+      info(`Extracciones: ${extracciones} | Peso: ${player.weight}/${player.weightMax}`);
+      break;
+    case 'esperar':
+      sleep(CFG.SLEEP_ESPERA_MINA);
+      break;
+    case 'vacio':
+      info("Sin recursos en este tile.");
+      sleep(CFG.SLEEP_ACCION);
+      break;
+    case 'error':
+      warn("Sin respuesta. Reintentando...");
+      sleep(CFG.SLEEP_ACCION);
+      break;
+  }
+}
+
+info(`Macro detenida. Extracciones totales: ${extracciones}.`);
