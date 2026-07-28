@@ -26,4 +26,13 @@
     - Puedes pedirle que entregue una camntidad determinada o que entregue todo lo que pueda
 
  ✅ Scavenger
- ✅ Cantar mana
+
+ ✅ Cantar mana [1 AJUSTE + 0 ACCIONES]
+  - AJUSTES: indicar coordenadas x y si queremos cantar en una zona concreta
+  - ACCIONES:
+  - OBJETIVO: Crea un bucle infinito en el que canta concentración (subida de mana)
+>> MEJORAS:
+ 1. Mensaje informativo si coordenadas 0 0: Puedes cambiarlas para cantar en un punto fijo
+ 2. Comprobaciones de skill música y encantar
+ 3. Comprobación de instrumentos en mochila (todos los tipos de instrumento...)
+ 4 . Añadir más canciones con sus mensajes de error y acierto?
