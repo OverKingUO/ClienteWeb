@@ -35,4 +35,6 @@
  1. Mensaje informativo si coordenadas 0 0: Puedes cambiarlas para cantar en un punto fijo
  2. Comprobaciones de skill música y encantar
  3. Comprobación de instrumentos en mochila (todos los tipos de instrumento...)
- 4 . Añadir más canciones con sus mensajes de error y acierto?
+ 4. Añadir más canciones con sus mensajes de error y acierto?
+ 5. Se me gasta el indtrumento y System: El instrumento musical que tienes seleccionado no esta en tu mochila!. Selecciona un instrumento musical.
+ 6. El save detiene la macro?
