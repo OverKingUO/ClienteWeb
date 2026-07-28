@@ -36,5 +36,10 @@
  2. Comprobaciones de skill música y encantar
  3. Comprobación de instrumentos en mochila (todos los tipos de instrumento...)
  4. Añadir más canciones con sus mensajes de error y acierto?
- 5. Se me gasta el indtrumento y System: El instrumento musical que tienes seleccionado no esta en tu mochila!. Selecciona un instrumento musical.
+ 5. Se me gasta el indtrumento o no lo tengo seleccionado y System: El instrumento musical que tienes seleccionado no esta en tu mochila!. Selecciona un instrumento musical.
  6. El save detiene la macro?
+
+Execution error: Exception executing 'journalWaitForText': Aborted
+    at waitForText (eval.js)
+    at checkWorldSave (script.ts:35)
+    at <anonymous> (script.ts:106)
