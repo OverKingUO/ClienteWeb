@@ -1,0 +1,152 @@
+// ============================================================
+// MACRO: Cantar Mana — Zona de Meditación
+// Versión: 1.2
+// Autor: Over
+//
+// Si configuras POS_X y POS_Y distintos de 0, la macro se
+// moverá a esas coordenadas exactas antes de empezar a cantar.
+// ============================================================
+
+
+// ============================================================
+// BLOQUE 1 — CONFIGURACIÓN DE USUARIO
+// ============================================================
+
+// Coordenadas donde cantar. 0,0 = ignorar, empezar donde estés.
+const POS_X = 0;
+const POS_Y = 0;
+
+
+// ============================================================
+// BLOQUE 2 — CONSTANTES INTERNAS (NO MODIFICAR)
+// ============================================================
+
+const MSG_ACIERTO  = "Tu melodia crea a tu alrededor una acogedora zona de meditacion";
+const MSG_FALLO    = "Estas muy proximo a una casa, no puedes cantar aqui una cancion de area";
+const MSG_YA_CANTA = "No puedes tocar 2 canciones a la vez";
+const MSG_FIN      = [
+  "Los efectos de tu cancion se desvanecen",
+  "Al moverte te desconcentras y tu cancion deja de surtir efecto",
+];
+
+const WS_AVISO  = "Dentro de 1 minuto habra un SAVE automatico";
+const WS_INICIO = "Comienza la grabacion del mundo";
+const WS_FIN_WS = "Comienza la grabacion de las bases de datos";
+
+
+// ============================================================
+// BLOQUE 3 — UTILIDADES
+// ============================================================
+
+function checkWorldSave(): void {
+  if (journal.containsText(WS_AVISO)) {
+    client.sysMsg("[CANTAR] Save en 1 min. Pausando...", 0x26);
+    journal.clear();
+    journal.waitForText(WS_INICIO, undefined, 90000);
+    journal.clear();
+    journal.waitForText(WS_FIN_WS, undefined, 180000);
+    client.sysMsg("[CANTAR] Save terminado.", 0x3B2);
+    journal.clear();
+    sleep(3000);
+  }
+}
+
+function esperarFinEfecto(): void {
+  client.sysMsg("[CANTAR] ♪ Zona de meditación activa. Esperando fin...", 0x3B2);
+  journal.clear();
+  journal.waitForTextAny(MSG_FIN, undefined, 300000);
+  client.sysMsg("[CANTAR] Efecto terminado. Volviendo a cantar...", 0x3B2);
+  sleep(500);
+}
+
+// Moverse tile a tile hasta llegar a las coordenadas exactas.
+// Tolerancia 0 — no para hasta estar en X,Y exactos.
+function moverseA(tx: number, ty: number): void {
+  client.sysMsg(`[CANTAR] Moviéndome a (${tx}, ${ty})...`, 0x3B2);
+
+  const MAX_PASOS = 200;
+  let pasos = 0;
+
+  while ((player.x !== tx || player.y !== ty) && pasos < MAX_PASOS) {
+    const dx = tx - player.x;
+    const dy = ty - player.y;
+
+    let dir: Directions;
+    if      (dx === 0 && dy < 0) dir = Directions.North;
+    else if (dx === 0 && dy > 0) dir = Directions.South;
+    else if (dx > 0  && dy === 0) dir = Directions.East;
+    else if (dx < 0  && dy === 0) dir = Directions.West;
+    else if (dx > 0  && dy < 0)  dir = Directions.Right;  // NE
+    else if (dx > 0  && dy > 0)  dir = Directions.Down;   // SE
+    else if (dx < 0  && dy > 0)  dir = Directions.Left;   // SW
+    else                          dir = Directions.Up;     // NW
+
+    player.run(dir);
+    sleep(180);
+    player.run(dir);
+    sleep(220);
+
+    pasos++;
+  }
+
+  if (player.x === tx && player.y === ty) {
+    client.sysMsg(`[CANTAR] Posición alcanzada (${player.x}, ${player.y}).`, 0x3B2);
+  } else {
+    client.sysMsg(`[CANTAR] ⚠ No pude llegar a (${tx}, ${ty}). Pos actual: (${player.x}, ${player.y}).`, 0x26);
+  }
+}
+
+
+// ============================================================
+// BLOQUE 4 — INICIO
+// ============================================================
+
+// Moverse a la posición configurada si no es 0,0
+if (POS_X !== 0 || POS_Y !== 0) {
+  if (player.x !== POS_X || player.y !== POS_Y) {
+    moverseA(POS_X, POS_Y);
+  } else {
+    client.sysMsg("[CANTAR] Ya estoy en la posición configurada.", 0x3B2);
+  }
+}
+
+client.sysMsg("[CANTAR] Iniciando bucle de canción de mana...", 0x3B2);
+
+
+// ============================================================
+// BLOQUE 5 — BUCLE PRINCIPAL
+// ============================================================
+
+while (true) {
+  checkWorldSave();
+
+  journal.clear();
+  player.say(".cancion3");
+
+  const resp = journal.waitForTextAny(
+    [MSG_ACIERTO, MSG_FALLO, MSG_YA_CANTA],
+    undefined,
+    6000
+  );
+
+  if (resp === null) {
+    client.sysMsg("[CANTAR] Sin respuesta. Reintentando...", 0x26);
+    sleep(2000);
+    continue;
+  }
+
+  if (resp.includes(MSG_YA_CANTA.substring(0, 20))) {
+    client.sysMsg("[CANTAR] Ya hay una canción activa. Esperando fin...", 0x3B2);
+    esperarFinEfecto();
+    continue;
+  }
+
+  if (resp.includes(MSG_FALLO.substring(0, 20))) {
+    client.sysMsg("[CANTAR] ⚠ Muy cerca de una casa. Muévete y la macro reintentará.", 0x26);
+    sleep(3000);
+    continue;
+  }
+
+  // Acierto
+  esperarFinEfecto();
+}
