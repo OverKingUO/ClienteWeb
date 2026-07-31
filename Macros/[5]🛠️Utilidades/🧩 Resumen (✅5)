@@ -29,7 +29,8 @@
     - Puedes pedirle que entregue una cantidad determinada o que entregue todo lo que pueda
     - Persigue al npc objetivo para no perderlo de vista
 ⚠️ >> MEJORAS:
- 1. Si al entregar objeto no cambia el peso, busca el graphic en el primer nivel de la mochila y lo entrega, porque significa que el npc 
+ 1. Aunque pueda tirar objetos a tres tiles de distancia, como esté a dos el obj me cae en la mochila...
+ 2. Si al entregar objeto no cambia el peso, busca el graphic en el primer nivel de la mochila y lo entrega, porque significa que el npc 
     se ha alejado y no le ha caido el item
 
  ✅ Scavenger [1 AJUSTE + 1 ACCIÓN]
