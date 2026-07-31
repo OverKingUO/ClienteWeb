@@ -1,12 +1,37 @@
-✅ Talar
- - ⛔ Talar en Isla Mágica
+✅ Extraer arena [2 AJUSTES + 4 ACCIONES]
+  - AJUSTES: Indicar posición de runa a casa y playa
+  - ACCIONES: Seleccionar libro de runas con runa a casa y playa, seleccionar cofre coger/dejar
+  - OBJETIVO: Extraer arena
+⚠️ >> MEJORAS:
+ 1. Cómo estandarizo el "set" de los cofres utilizados? coger regs, pala, pico - Dejar arena, cangrejos, gemas ...
+   - Lo único que se me ocurre es que pregunte como si tuviera el max del separaciones/bolsas (uno por item) y que seleccione el mismo, sin problema:
+es decir: "1 selcciona donde vas a dejar cangrejos 2 selecciona donde vas a dejar gemas 3 selecciona donde vas a dejar arena" AUNQUE es posible que
+el usuario seleccione tres veces el mismo contenedor - problema, que este contenedor esté dentro de otro ... sería un pulsa ESC y selecciona...
+y si al hacer una selección ya ve que ahí está dejando otro de los items, ya no preguntar?
+
+✅ Talar [1 AJUSTES + 4 ACCIONES]
+  - AJUSTES: Indicar posición de runa a casa
+  - ACCIONES: Seleccionar libro de runas con runa a casa y bosques, seleccionar cofre coger/dejar
+  - OBJETIVO: Obtener madera y ambar
+⚠️ >> MEJORAS:
+ 1. Movimiento del pj (ya se había solucionado...)
+ 2. Si hay ajuste de coordenadas de casa, quitarlo
+
+
 ❌ Minar
- - ⛔ Minar en Gran Norte
- - ⛔ Minar en Lake Shire
+
 ❌ Pescar
- - ⛔ Pescar en lago Ilshenar
 
 ❌ Comprar ingredientes (mago / nigromante)
+
 ❌ Recoger ingredientes (cocina)
-✅ Extraer arena
-⛔ Recolectar pieles (lobos / establos)
+
+
+
+
+
+ - ⛔ Talar en Isla Mágica
+ - ⛔ Minar en Gran Norte
+ - ⛔ Minar en Lake Shire
+ - ⛔ Pescar en lago Ilshenar
+ - ⛔ Recolectar pieles (lobos / establos)
