@@ -28,6 +28,9 @@
   - OBJETIVO: entrega objetos (reputaciones, champs, eventos...) 
     - Puedes pedirle que entregue una cantidad determinada o que entregue todo lo que pueda
     - Persigue al npc objetivo para no perderlo de vista
+⚠️ >> MEJORAS:
+ 1. Si al entregar objeto no cambia el peso, busca el graphic en el primer nivel de la mochila y lo entrega, porque significa que el npc 
+    se ha alejado y no le ha caido el item
 
  ✅ Scavenger [1 AJUSTE + 1 ACCIÓN]
   - AJUSTES: añadir objetos (graphics) a la lista de loteo 
