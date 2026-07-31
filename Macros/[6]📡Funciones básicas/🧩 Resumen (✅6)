@@ -5,6 +5,7 @@
   - OBJETIVO: Evitar que las macros se detengan al entrar en un guardado automático del servidor
 ⚠️ >> MEJORAS:
  1. Se detiene con el aviso, el minuto antes del save y no estoy seguro de que vuelva en sí al terminar...
+ 2. A veces se detiene al iniciar porque ve el mensaje pasado, creo que por:  // Por si la macro no pilló el aviso y ya está en pleno save
 
 ✅ Alimentar al personaje 🚧EN PROCESO🚧
 
