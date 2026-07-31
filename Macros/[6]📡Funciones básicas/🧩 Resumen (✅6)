@@ -1,5 +1,10 @@
 
-✅ Detectar guardados automáticos 🚧EN PROCESO🚧
+✅ Detectar guardados automáticos  [0 AJUSTES + 0 ACCIONES]
+  - AJUSTES: 
+  - ACCIONES:
+  - OBJETIVO: Evitar que las macros se detengan al entrar en un guardado automático del servidor
+⚠️ >> MEJORAS:
+ 1. Se detiene con el aviso, el minuto antes del save y no estoy seguro de que vuelva en sí al terminar...
 
 ✅ Alimentar al personaje 🚧EN PROCESO🚧
 
@@ -7,6 +12,8 @@
   - OBJETIVO: Ver/Comprobar nivel real de habilidades para actuar en consecuencia
     - Consideredas TODAS las habilidades (58)
     - Tiene en cuenta solo el nivel REAL
+⚠️ >> MEJORAS:
+ 1. Añadirle una opción para que muestre al lado de la real el plus de joyas&ropa?
 
 ✅ Obtener propiedades de objetos y personas [1 AJUSTE + 1 ACCIÓN] 🚧EN PROCESO🚧
   - AJUSTES: Indicar datos a mostrar
