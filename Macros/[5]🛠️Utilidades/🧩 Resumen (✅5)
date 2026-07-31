@@ -11,6 +11,9 @@
     - Detecta si el destino está lleno (255 items) antes de cada movimiento
     - Si un item cae al suelo durante el movimiento, lo localiza por serial y lo devuelve al origen
     - Calcula el peso real de cada item moviéndolo una vez a tu mochila
+⚠️ >> MEJORAS:
+ 1. No puedes coger Serial de bank?
+ 2. Si origen/destino es bank, se cierra mientras seteas
  
  ✅ Cantar labor [1 AJUSTE + 1 ACCIÓN]
   - AJUSTES: indicar canción deseada (1-8)
@@ -23,20 +26,25 @@
   - AJUSTES: (no imprescindible) indicar límite (0-N)
   - ACCIONES: seleccionar contenedor origen, objeto deseado y personaje objetivo
   - OBJETIVO: entrega objetos (reputaciones, champs, eventos...) 
-    - Puedes pedirle que entregue una camntidad determinada o que entregue todo lo que pueda
+    - Puedes pedirle que entregue una cantidad determinada o que entregue todo lo que pueda
+    - Persigue al npc objetivo para no perderlo de vista
 
- ✅ Scavenger
+ ✅ Scavenger [1 AJUSTE + 1 ACCIÓN]
+  - AJUSTES: añadir objetos (graphics) a la lista de loteo 
+  - ACCIONES: seleccionar objeto para añadir provisionalmente a la lista
+  - OBJETIVO: Coge todos los objetos deseados del suelo
+    - Incluye comando de voz ".add" ingame para añadir objetos de loteo sobre la marcha
 
  ✅ Cantar mana [1 AJUSTE + 0 ACCIONES]
   - AJUSTES: indicar coordenadas x y si queremos cantar en una zona concreta
   - ACCIONES:
   - OBJETIVO: Crea un bucle infinito en el que canta concentración (subida de mana)
->> MEJORAS:
+⚠️ >> MEJORAS:
  1. Mensaje informativo si coordenadas 0 0: Puedes cambiarlas para cantar en un punto fijo
  2. Comprobaciones de skill música y encantar
  3. Comprobación de instrumentos en mochila (todos los tipos de instrumento...)
  4. Añadir más canciones con sus mensajes de error y acierto?
- 5. Se me gasta el indtrumento o no lo tengo seleccionado y System: El instrumento musical que tienes seleccionado no esta en tu mochila!. Selecciona un instrumento musical.
+ 5. Se me gasta el instrumento o no lo tengo seleccionado y System: El instrumento musical que tienes seleccionado no esta en tu mochila!. Selecciona un instrumento musical.
  6. El save detiene la macro?
 
 Execution error: Exception executing 'journalWaitForText': Aborted
