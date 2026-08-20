@@ -1,5 +1,5 @@
  ✅ Mover objetos [2 AJUSTES + 3 ACCIONES]
-  - AJUSTES: (no imprescindibles) indicar filtro por color (S/N) y contemplación de variantes (S/N)
+  - AJUSTES: (no imprescindibles) establecer filtro por color (S/N) y contemplar posibles variantes (S/N)
   - ACCIONES: seleccionar contenedor origen, objeto deseado y contenedor destino
   - OBJETIVO: Mueve objetos desde origen hasta destino
     - Puedes pedirle que filtre por hue (o no) = moverá items iguales SOLO del mismo color
@@ -11,9 +11,8 @@
     - Detecta si el destino está lleno (255 items) antes de cada movimiento
     - Si un item cae al suelo durante el movimiento, lo localiza por serial y lo devuelve al origen
     - Calcula el peso real de cada item moviéndolo una vez a tu mochila
-⚠️ >> MEJORAS:
- 1. No puedes coger Serial de bank?
- 2. Si origen/destino es bank, se cierra mientras seteas
+    - Como no abre el contenedor destino, ya no se fastidia al interactuar con el bank
+    - Mensajes mucho más claros con el sistema : ⚠️ Advertencia — amarillo | ❌ Error — rojo | ✅ Acierto — verde | ℹ️ Info — azul
  
  ✅ Cantar labor [1 AJUSTE + 1 ACCIÓN]
   - AJUSTES: indicar canción deseada (1-8)
