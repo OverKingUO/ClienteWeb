@@ -13,6 +13,8 @@
     - Calcula el peso real de cada item moviéndolo una vez a tu mochila
     - Como no abre el contenedor destino, ya no se fastidia al interactuar con el bank
     - Mensajes mucho más claros con el sistema : ⚠️ Advertencia — amarillo | ❌ Error — rojo | ✅ Acierto — verde | ℹ️ Info — azul
+⚠️ >> MEJORAS:
+Copia hecha de macro mover objetos, a ver si puede autoajustar el sleep
  
  ✅ Cantar labor [1 AJUSTE + 1 ACCIÓN]
   - AJUSTES: indicar canción deseada (1-8)
