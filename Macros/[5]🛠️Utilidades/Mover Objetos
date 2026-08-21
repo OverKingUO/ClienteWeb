@@ -1,6 +1,6 @@
 // ===================================================|
 // MACRO: Mover objetos                               |
-// Versión: 8.0 || Autor: Over (Barack Segoviain)     |
+// Versión: 6.3 || Autor: Over (Barack Segoviain)     |
 // ===================================================|
 //
 // ___________________________________________________
@@ -14,26 +14,38 @@ const IDENTIFICAR_GRAPHICS: 'SI' | 'NO' = 'NO';
 //                                                    |
 // ___________________________________________________|
 
-// METER COMPROBANTE DE SAVE
-// METER COMPROBANTE DE VIDA #CHARGHOST
 
 // ====================================================
-// BLOQUE 2 — CONSTANTES INTERNAS (NO MODIFICAR)
+// BLOQUE 2 — CONSTANTES INTERNAS (MODIFICAR CON CUIDADO)
 // ====================================================
-const SLEEP_MOVE         = 700;
-const SLEEP_CONTENEDOR   = 1200;
+
+const SLEEP_MOVE          = 150;
+const SLEEP_CONTENEDOR    = 1200;
+
+// Tiempo de espera al detectar el cooldown de "coger" del juego
+// ("No puedes coger eso"). Se multiplica por el nº de fallo consecutivo
+// (1º fallo = 1×, 2º = 2×...). Bájalo si te parece demasiado lento.
+const SLEEP_REINTENTO_LIFT = 300;
+
+// Tiempo de espera ante un rechazo genérico (no identificado como
+// cooldown de lift). Mismo sistema de multiplicación por intento.
+const SLEEP_REINTENTO_GENERICO = 400;
 const SLEEP_CONFIRMACION = 400;
 const SLEEP_SUELO        = 800;   // espera tras tirar al suelo para escanear
 
+// Confirmación activa: en vez de esperar siempre un tiempo fijo, se
+// comprueba cada POLL_INTERVAL si el movimiento ya se confirmó, hasta
+// un máximo de TIMEOUT_MOVE_CONFIRM.
+const POLL_INTERVAL        = 80;
+const TIMEOUT_MOVE_CONFIRM = 2500;
+
 // Límite real de UO: un contenedor no admite más de 255 items distintos
-// (slots). En items NO stackeables cada unidad ocupa un slot propio, así
-// que este límite se alcanza fácilmente. Se comprueba antes de CADA
-// movimiento, no solo al principio.
+// (slots). En items NO stackeables cada unidad ocupa un slot propio.
 const LIMITE_CONTENEDOR = 255;
 
-// Mensaje que manda el servidor si, por error de cálculo, se intenta meter
-// un item en un contenedor que ya está lleno.
+// Mensajes conocidos del servidor
 const MSG_CONTENEDOR_LLENO = "Demasiados objetos en este contenedor.";
+const MSG_NO_PUEDES_COGER  = "No puedes coger eso";
 
 
 // ====================================================
@@ -44,6 +56,16 @@ function warn(msg: string): void { client.sysMsg(`⚠️ ${msg}`, 0x35); }   // 
 function err(msg: string):  void { client.sysMsg(`❌ ${msg}`, 0x26); }   // Error — rojo
 function ok(msg: string):   void { client.sysMsg(`✅ ${msg}`, 0x44); }   // Acierto — verde
 function info(msg: string): void { client.sysMsg(`ℹ️ ${msg}`, 0x5A); }   // Info — azul
+function run(msg: string):  void { client.sysMsg(`⚙️ ${msg}`, 0x00); }   // Funcionamiento — blanco
+
+// Metadatos del script — se leen de la cabecera del propio archivo.
+// Cámbialos aquí si cambias nombre/versión/autor, para que el mensaje
+// de inicio siempre esté sincronizado con el comentario de arriba.
+const SCRIPT_NOMBRE  = "Mover objetos";
+const SCRIPT_VERSION = "6.3";
+const SCRIPT_AUTOR   = "Over";
+
+run(`[▶ script iniciado] ${SCRIPT_NOMBRE} v${SCRIPT_VERSION} by ${SCRIPT_AUTOR}`);
 
 function estaEnMochila(serial: number): boolean {
   if (!player.backpack) return false;
@@ -59,29 +81,6 @@ function contarItemsEnContenedor(serial: number): number {
   const cont = client.findObject({ serial }) as Item | null;
   if (!cont || !Array.isArray((cont as any).contents)) return 0;
   return (cont as any).contents.length;
-}
-
-// Busca un item por serial en el suelo (cerca del jugador, rango 2)
-function buscarEnSuelo(serial: number): Item | null {
-  const obj = client.findObject({ serial });
-  if (!obj) return null;
-  // Si no está en ningún contenedor (container = 0), está en el suelo
-  if ((obj as Item).container === 0 || (obj as Item).container === undefined) return obj as Item;
-  return null;
-}
-
-// Busca cualquier item con el graphic dado en el suelo cerca del jugador
-function buscarGraphicEnSuelo(graphic: number): Item | null {
-  return client.findType(graphic, null, null, null, 2) as Item | null;
-}
-
-// Comprueba si serialItem está DENTRO de serialContenedor, a cualquier
-// profundidad (sub-bolsas incluidas). range=null busca en todo el árbol,
-// no solo en el contenedor directo.
-function estaContenidoEn(serialItem: number, serialContenedor: number): boolean {
-  if (serialItem === serialContenedor) return false;
-  const encontrado = client.findObject({ serial: serialItem }, null, { serial: serialContenedor }, null, null);
-  return !!encontrado;
 }
 
 
@@ -129,12 +128,9 @@ if (serialDestino === serialOrigen) {
   exit();
 }
 
-// Si el origen está DENTRO del destino, solo registramos — no abrimos nada.
-// En cualquier otro caso tampoco es necesario abrirlo para mover items hacia él.
 info("Destino registrado.");
 
 const itemsIniciales = contarItemsEnContenedor(serialDestino);
-info(`El destino ya tiene ${itemsIniciales}/${LIMITE_CONTENEDOR} items.`);
 if (itemsIniciales >= LIMITE_CONTENEDOR) {
   err("El destino ya está lleno (255 items). Macro detenida.");
   exit();
@@ -163,7 +159,6 @@ if (IDENTIFICAR_GRAPHICS === 'SI') {
 
   info("Comprobando graphics alternativos...");
 
-  // Coger un item del origen (uno solo, cantidad 1)
   let itemParaTirar = client.findType(
     graphicInicial,
     FILTRAR_POR_HUE === 'SI' ? hueObjetivo : null,
@@ -175,18 +170,14 @@ if (IDENTIFICAR_GRAPHICS === 'SI') {
     exit();
   }
 
-  // Guardar el serial — es el identificador permanente del item
   const serialDelItem = itemParaTirar.serial;
 
-  // Tirar al suelo junto al jugador
   player.moveItemOnGroundOffset(itemParaTirar, 0, 0, 0, 1);
   sleep(SLEEP_SUELO);
 
-  // Bucle: leer graphic por serial → recoger → tirar → repetir
   let intentos = 0;
 
   while (intentos < 10) {
-    // Buscar el item por serial (funciona en suelo, mochila o contenedor)
     const itemAhora = client.findObject({ serial: serialDelItem }) as Item | null;
     if (!itemAhora) { err("Perdí el rastro del item. Abortando detección."); break; }
 
@@ -197,17 +188,14 @@ if (IDENTIFICAR_GRAPHICS === 'SI') {
       info(`Graphic alternativo: 0x${graphicActual.toString(16).toUpperCase()}`);
     }
 
-    // Si después del primer tiro el graphic volvió al inicial, ciclo completo
     if (intentos > 0 && graphicActual === graphicInicial) {
       info("Ciclo de graphics completo.");
       break;
     }
 
-    // Recoger a la mochila
     player.moveItem(itemAhora, player.backpack!, 0, 0, 0, 1);
     sleep(SLEEP_SUELO);
 
-    // Tirar de nuevo al suelo
     const enMochila = client.findObject({ serial: serialDelItem }) as Item | null;
     if (!enMochila) break;
     player.moveItemOnGroundOffset(enMochila, 0, 0, 0, 1);
@@ -219,7 +207,6 @@ if (IDENTIFICAR_GRAPHICS === 'SI') {
   todosGraphics = Array.from(graphicsConocidos);
   info(`Graphics totales: ${todosGraphics.map(g => "0x" + g.toString(16).toUpperCase()).join(", ")}`);
 
-  // Mover el item al destino como primer item transferido
   {
     const itemAhora = client.findObject({ serial: serialDelItem }) as Item | null;
     if (itemAhora) {
@@ -229,9 +216,7 @@ if (IDENTIFICAR_GRAPHICS === 'SI') {
     }
   }
 } else {
-  // Sin detección: solo el graphic inicial seleccionado
   todosGraphics = [graphicInicial];
-  info("Detección de graphics desactivada — se usará solo el graphic inicial.");
 }
 
 
@@ -251,46 +236,32 @@ if (IDENTIFICAR_GRAPHICS === 'SI') {
 //  3) ninguno es mi mochila (contenedor externo → contenedor externo,
 //     ej. bolsa hija → cofre padre) → no cargo el peso en mi inventario,
 //     pero UO sí limita cuánto puedo "arrastrar" de una vez: el TRIPLE
-//     de mi peso máximo real (fórmula UO: maxWeight = 3.5*STR + 40 →
-//     capacidad de arrastre = 3 * maxWeight). Antes esto no se comprobaba
-//     y la macro intentaba mover el stack entero de golpe.
+//     de mi peso máximo real.
 
 const origenEnMochila  = estaEnMochila(serialOrigen);
 const destinoEnMochila = estaEnMochila(serialDestino);
 const pesoSube          = !origenEnMochila && destinoEnMochila;
 const ambosExternos     = !origenEnMochila && !destinoEnMochila;
 
-if (pesoSube) {
-  info("Destino = mi mochila. Se respetará mi peso máximo real.");
-} else if (ambosExternos) {
-  info("Origen y destino son externos. Se respetará mi capacidad de arrastre (3× mi peso máximo).");
-} else {
-  info("El objeto sale de (o se mueve dentro de) mi mochila. Sin límite de peso.");
-}
-
-// La API no expone Item.weight — el peso por unidad se mide indirectamente
-// por el delta que provoca en player.weight al pasar por MI mochila.
-// Se necesita en los casos 1 y 3; en el caso 2 no hace falta (sin límite).
 let pesoUnaUnidad = 1; // fallback si no se puede medir
 
 if (pesoSube || ambosExternos) {
-  // Buscar un item en el origen para la medición
   let itemMedicion: Item | null = null;
   for (const g of todosGraphics) {
     const candidato = client.findType(g, FILTRAR_POR_HUE === 'SI' ? hueObjetivo : null, { serial: serialOrigen }, null, 0) as Item | null;
     if (candidato) { itemMedicion = candidato; break; }
   }
 
-  if (itemMedicion) {
+  if (itemMedicion && itemMedicion.amount > 1) {
+    // Solo merece la pena medir si es un stack real (>1 unidad). Si el
+    // ítem no es stackeable, cada movimiento va a ser de 1 unidad de
+    // todas formas — medir solo añadía un viaje de ida y vuelta que a
+    // veces dejaba un ítem huérfano en la mochila si algo fallaba.
     const serialMedicion = itemMedicion.serial;
     const pesoAntes = player.weight;
 
-    // La medición SIEMPRE pasa por mi mochila — es la única forma de leer
-    // el peso vía delta. Si el destino real es externo (caso 3), esta
-    // unidad se reenvía al destino real justo después de medirla.
     player.moveItem(itemMedicion, player.backpack!, 0, 0, 0, 1);
 
-    // Esperar a que el peso cambie (máx 2s)
     const inicioMedicion = Date.now();
     while (player.weight === pesoAntes && Date.now() - inicioMedicion < 2000) {
       sleep(100);
@@ -303,11 +274,8 @@ if (pesoSube || ambosExternos) {
       info(`Peso real del objeto: ${pesoUnaUnidad} unidad/es.`);
 
       if (pesoSube) {
-        // El destino real ES mi mochila: la unidad de medición ya está
-        // en su sitio, no hace falta reenviarla.
         info("Primer item ya está en el destino (mi mochila).");
       } else {
-        // ambosExternos: reenviar la unidad de medición al destino real.
         const enMochila = client.findObject({ serial: serialMedicion }, null, player.backpack) as Item | null;
         if (enMochila) {
           player.moveItem(enMochila, { serial: serialDestino }, 0, 0, 0, 1);
@@ -316,13 +284,12 @@ if (pesoSube || ambosExternos) {
         }
       }
     } else if (deltaPeso < 0) {
-      // El peso bajó — el item cayó al suelo (mochila llena o error)
       err("El item cayó al suelo durante la medición de peso. Buscando y recuperando...");
 
       let recuperado = false;
       for (const g of todosGraphics) {
         const enSuelo = client.findType(g, null, null, null, 3) as Item | null;
-        if (enSuelo && (enSuelo as any).container === 0) {
+        if (enSuelo && (enSuelo as any).container === -1) {
           player.moveItem(enSuelo, { serial: serialOrigen }, 0, 0, 0, 1);
           sleep(SLEEP_MOVE);
           recuperado = true;
@@ -331,17 +298,18 @@ if (pesoSube || ambosExternos) {
       }
       if (!recuperado) err("No se pudo recuperar el item del suelo. Continúa con precaución.");
     } else {
-      // Peso no cambió — el item no llegó a mi mochila
       err("El item no llegó a mi mochila durante la medición. Puede que esté en el suelo.");
       for (const g of todosGraphics) {
         const enSuelo = client.findType(g, null, null, null, 3) as Item | null;
-        if (enSuelo && (enSuelo as any).container === 0) {
+        if (enSuelo && (enSuelo as any).container === -1) {
           player.moveItem(enSuelo, { serial: serialOrigen }, 0, 0, 0, 1);
           sleep(SLEEP_MOVE);
           break;
         }
       }
     }
+  } else if (itemMedicion) {
+    // objeto no stackeable (o solo queda 1 unidad) — se omite la medición
   }
 }
 
@@ -365,9 +333,6 @@ function buscarEnOrigen(): Item[] {
 // BLOQUE 8 — BUCLE DE MOVIMIENTO
 // ====================================================
 
-// Si el servidor rechaza el pickup porque el destino está lleno, el item
-// puede caer en la mochila del jugador o en el suelo — se busca por su
-// SERIAL (funciona en cualquiera de los dos sitios) y se devuelve al origen.
 function recuperarPorContenedorLleno(serialItem: number): void {
   err(`El destino está lleno ("${MSG_CONTENEDOR_LLENO}"). Recuperando el item...`);
   const encontrado = client.findObject({ serial: serialItem }) as Item | null;
@@ -380,22 +345,25 @@ function recuperarPorContenedorLleno(serialItem: number): void {
   info("Item devuelto al origen.");
 }
 
-info("Iniciando movimiento...");
+run("Iniciando movimiento...");
 let movidos = 0;         // nº de operaciones de movimiento (iteraciones)
 let unidadesTotales = 0; // nº real de objetos transferidos (suma de cantidades)
 let parado  = false;
 let fallosConsecutivos = 0;
 
 while (true) {
+  // Comprobamos primero si queda algo por mover — si no queda nada,
+  // es un final normal con éxito, sin importar en qué número esté el
+  // destino (podría haber llegado justo a 255 con el último movimiento).
+  const items = buscarEnOrigen();
+  if (items.length === 0) break;
+
   const itemsEnDestino = contarItemsEnContenedor(serialDestino);
   if (itemsEnDestino >= LIMITE_CONTENEDOR) {
-    err(`El destino ha llegado al límite de ${LIMITE_CONTENEDOR} items. Macro detenida.`);
+    err(`El destino ha llegado al límite de ${LIMITE_CONTENEDOR} items. Aún quedan objetos sin mover en el origen. Macro detenida.`);
     parado = true;
     break;
   }
-
-  const items = buscarEnOrigen();
-  if (items.length === 0) break;
 
   const item = items[0];
   const serialItemActual = item.serial;
@@ -403,17 +371,13 @@ while (true) {
 
   journal.clear();
 
-  // ── Calcular cuánto se puede mover de este stack ──
-  // Casos 1 y 3 (pesoSube / ambosExternos) tienen límite; el caso 2
-  // (sale de mi mochila o se mueve dentro de ella) no lo tiene: el
-  // objeto ya está contado en mi peso actual.
   let aMover = item.amount;
 
   if (pesoSube || ambosExternos) {
-    const limiteArrastre = (3 * player.weightMax) - player.weight; // capacidad de arrastre libre
+    const limiteArrastre = (3 * player.weightMax) - player.weight;
     const limitePeso = pesoSube
-      ? Math.max(0, player.weightMax - player.weight - 1)           // lo que me queda de capacidad real
-      : Math.max(0, limiteArrastre - 1);                             // capacidad de arrastre libre (3× max - actual)
+      ? Math.max(0, player.weightMax - player.weight - 1)
+      : Math.max(0, limiteArrastre - 1);
 
     if (limitePeso < pesoUnaUnidad) {
       if (pesoSube) {
@@ -431,16 +395,32 @@ while (true) {
 
   const pesoAntes = player.weight;
   player.moveItem(item, { serial: serialDestino }, 0, 0, 0, aMover);
+  sleep(SLEEP_MOVE);
+
+  // ── Confirmación del movimiento ──
+  // Una sola fuente de verdad: el propio bucle de polling marca
+  // 'confirmado', comprobando dos señales (desaparece del origen O
+  // aparece en el destino, lo que llegue antes).
+  let confirmado = false;
 
   if (pesoSube) {
-    // Solo aquí mi peso realmente cambia — se usa para confirmar el éxito.
     const inicio = Date.now();
     while (player.weight === pesoAntes && Date.now() - inicio < 2000) {
       sleep(100);
     }
     sleep(SLEEP_CONFIRMACION);
+    confirmado = player.weight !== pesoAntes;
   } else {
-    sleep(SLEEP_MOVE);
+    const inicioPoll = Date.now();
+    while (Date.now() - inicioPoll < TIMEOUT_MOVE_CONFIRM) {
+      const enOrigen = client.findObject({ serial: serialItemActual }, null, { serial: serialOrigen }) as Item | null;
+      if (!enOrigen || enOrigen.amount !== amountAntes) { confirmado = true; break; }
+
+      const enDestino = client.findObject({ serial: serialItemActual }, null, { serial: serialDestino }) as Item | null;
+      if (enDestino) { confirmado = true; break; }
+
+      sleep(POLL_INTERVAL);
+    }
   }
 
   if (journal.containsText(MSG_CONTENEDOR_LLENO)) {
@@ -449,13 +429,14 @@ while (true) {
     break;
   }
 
-  if (pesoSube && player.weight === pesoAntes) {
-    // El peso no cambió — el item puede haber caído al suelo
+  const rechazoLift = journal.containsText(MSG_NO_PUEDES_COGER);
+
+  if (pesoSube && !confirmado) {
     err("El item no llegó al destino (posiblemente cayó al suelo). Buscando...");
     let recuperado = false;
     for (const g of todosGraphics) {
       const enSuelo = client.findType(g, null, null, null, 3) as Item | null;
-      if (enSuelo && (enSuelo as any).container === 0) {
+      if (enSuelo && (enSuelo as any).container === -1) {
         info("Item encontrado en el suelo. Devolviéndolo al origen...");
         player.moveItem(enSuelo, { serial: serialOrigen }, 0, 0, 0, 1);
         sleep(SLEEP_MOVE);
@@ -468,32 +449,33 @@ while (true) {
     break;
   }
 
-if (!pesoSube) {
-    // ambosExternos / sale de mi mochila: no hay señal de peso, verificar
-    // por presencia en el origen. Si sigue con la misma cantidad, el
-    // servidor rechazó el movimiento.
-    const sigueEnOrigen = client.findObject({ serial: serialItemActual }, null, { serial: serialOrigen }) as Item | null;
-
-    if (sigueEnOrigen && sigueEnOrigen.amount === amountAntes) {
+  if (!pesoSube) {
+    if (!confirmado) {
       fallosConsecutivos++;
       if (fallosConsecutivos >= 5) {
         err(`El item sigue sin moverse tras ${fallosConsecutivos} intentos. Macro detenida.`);
         parado = true;
         break;
       }
-      warn(`El servidor rechazó el movimiento. Esperando antes de reintentar (${fallosConsecutivos}/5)...`);
-      sleep(1500);
-        } else {
+      if (rechazoLift) {
+        warn(`Cooldown de "coger" del juego. Esperando antes de reintentar (${fallosConsecutivos}/5)...`);
+        sleep(SLEEP_REINTENTO_LIFT * fallosConsecutivos);
+      } else {
+        warn(`El servidor rechazó el movimiento. Esperando antes de reintentar (${fallosConsecutivos}/5)...`);
+        sleep(SLEEP_REINTENTO_GENERICO * fallosConsecutivos);
+      }
+    } else {
       fallosConsecutivos = 0;
-      if (sigueEnOrigen) sleep(SLEEP_CONFIRMACION);
       movidos++;
       unidadesTotales += aMover;
+      sleep(SLEEP_MOVE);
     }
     continue;
   }
 
   movidos++;
   unidadesTotales += aMover;
+  sleep(SLEEP_MOVE);
 }
 
 // ── Fin ─────────────────────────────────────────────────────
@@ -502,10 +484,8 @@ if (!parado) {
   if (movidos === 0) {
     err("No se encontraron items del tipo indicado en el origen.");
   } else if (unidadesTotales !== movidos) {
-    // Stackeable: al menos un movimiento transfirió más de 1 unidad de golpe
     ok(`Completado. Movimientos realizados: ${movidos}. Objetos movidos: ${unidadesTotales}.`);
   } else {
-    // No stackeable: cada movimiento = 1 objeto, no hace falta distinguir
     ok(`Completado. Objetos movidos: ${unidadesTotales}.`);
   }
 }
