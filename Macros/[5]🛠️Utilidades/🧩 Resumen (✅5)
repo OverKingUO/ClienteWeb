@@ -13,6 +13,7 @@
     - Calcula el peso real de cada item moviéndolo una vez a tu mochila
     - Como no abre el contenedor destino, ya no se fastidia al interactuar con el bank
     - Mensajes mucho más claros con el sistema : ⚠️ Advertencia — amarillo | ❌ Error — rojo | ✅ Acierto — verde | ℹ️ Info — azul | ⚙️ Funcionamiento — blanco
+⚠️ AÑADIR PITIDOS DE AVISO FALLO/FIN
  
  ✅ Cantar labor [1 AJUSTE + 1 ACCIÓN]
   - AJUSTES: indicar canción deseada (1-8)
